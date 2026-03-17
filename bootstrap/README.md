@@ -1,14 +1,8 @@
-# Bootstrap Reference Docs
+# Bootstrap Reference
 
-Reference documentation for the Claude Code Bootstrap system v2.0.0.
+Reference documentation for the Claude Code Bootstrap system v3.0.0.
 
-## Files in This Directory
-
-| File | Purpose |
-|------|---------|
-| `TEMPLATE-CLAUDE.md` | Master template showing every section a generated `CLAUDE.md` can contain |
-
-## How the Bootstrap System Works
+## How It Works
 
 ### 1. Installer (`claude-bootstrap-installer.sh`)
 
@@ -19,30 +13,28 @@ bash claude-bootstrap-installer.sh
 ```
 
 Creates:
-- `.claude/settings.json` -- PreToolUse hook blocks writes to credential files
-- `.claude/hooks/file-guard.js` -- Node.js hook that enforces the credential block
-- `.claude/commands/` -- 5 slash commands (commit, run-ci, whats-next, fix-pr, summarize)
-- `.claude/agents/project-bootstrap.md` -- the bootstrap agent
-- `.claude/agents/summarize-chat.md` -- session summarizer
+- `.claude/settings.json` — EnterPlanMode blocked; PreToolUse file-guard hook
+- `.claude/hooks/file-guard.js` — blocks writes to .env* and credentials
+- `.claude/commands/` — 5 slash commands (commit, run-ci, whats-next, fix-pr, summarize)
+- `.claude/agents/project-bootstrap.md` — the bootstrap agent
+- `.claude/agents/summarize-chat.md` — session summarizer
 
 ### 2. Bootstrap Agent (`project-bootstrap`)
 
 Run once per project after the installer. Interviews you and generates all project-specific config.
 
-Invoke it in Claude Code:
-
 ```
 Use the project-bootstrap agent to set up this project
 ```
 
-The agent generates:
-- `CLAUDE.md` (project root)
-- `.mcp.json` (project root)
-- `.claude/settings.json` updates (PostToolUse lint hook for Node.js projects)
-- `.claude/rules/dev-reference.md` (always -- auto-loaded every session)
+Generates:
+- `CLAUDE.md`
+- `.mcp.json`
+- `.claude/settings.json` updates (PostToolUse lint hook for Node.js)
+- `.claude/rules/dev-reference.md` (always — auto-loaded every session)
 - `.claude/rules/design-system.md` (frontend projects)
 - `.claude/rules/database.md` (database projects)
-- `.claude/agents/general-assistant.md` (always)
+- `.claude/agents/general-assistant.md`
 - `.claude/agents/database-specialist.md` (if database selected)
 - `.claude/agents/playwright-tester.md` (if Playwright selected)
 - `.claude/agents/code-reviewer.md` (team/production projects)
@@ -52,15 +44,13 @@ The agent generates:
 
 | Command | What it does |
 |---------|-------------|
-| `/commit` | Runs lint, stages files (not credentials), creates a conventional commit |
-| `/run-ci` | Iterates lint + tests until everything passes |
-| `/whats-next` | Generates a session handoff document in `.claude/handoff-[date].md` |
-| `/fix-pr` | Pulls latest and addresses all PR review comments in order |
-| `/summarize` | Summarizes the current session via the summarize-chat agent |
+| `/commit` | Lint, stage (no credentials), conventional commit |
+| `/run-ci` | Iterate lint + tests until passing |
+| `/whats-next` | Session handoff doc in `.claude/handoff-[date].md` |
+| `/fix-pr` | Pull latest, address all PR review comments |
+| `/summarize` | Session summary via summarize-chat agent |
 
-## MCP Servers Reference
-
-The bootstrap agent configures `.mcp.json` based on your stack:
+## MCP Reference
 
 ```json
 {
@@ -77,83 +67,55 @@ The bootstrap agent configures `.mcp.json` based on your stack:
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github@latest"],
       "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }
-    },
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem@latest", "."]
     }
   }
 }
 ```
 
-Required environment variables:
-- `SUPABASE_ACCESS_TOKEN` -- Supabase personal access token (Settings > Access Tokens)
-- `GITHUB_TOKEN` -- GitHub personal access token with `repo` scope
+Required env vars:
+- `SUPABASE_ACCESS_TOKEN` — Supabase Settings > Access Tokens
+- `GITHUB_TOKEN` — GitHub personal access token with `repo` scope
 
 ## Re-bootstrap Safety
 
-Safe to re-run at any time. The bootstrap agent will detect an existing `CLAUDE.md` and offer:
+Safe to re-run. The bootstrap agent detects existing `CLAUDE.md` and offers Update / Add Superpowers / Regenerate / Cancel. Never silently overwrites.
 
-1. **Update** -- add missing sections (Verification Gate, Token Efficiency, new agents)
-2. **Add Superpowers** -- only insert the Superpowers workflow section
-3. **Regenerate** -- full re-interview and replace all generated files
-4. **Cancel** -- exit without any changes
-
-Your existing setup is never silently overwritten.
-
-## Committing Generated Files
-
-After the bootstrap agent runs, commit everything:
+## Commit After Bootstrap
 
 ```bash
 git add CLAUDE.md .mcp.json .claude/
 git commit -m "chore: add Claude Code configuration"
 ```
 
-Teammates who clone the repo will get the same configuration automatically when they open Claude Code.
-
 ## File Structure After Full Bootstrap
 
 ```
-your-project/
+project/
   CLAUDE.md
   .mcp.json
   .claude/
     settings.json
-    hooks/
-      file-guard.js
-    commands/
-      commit.md
-      run-ci.md
-      whats-next.md
-      fix-pr.md
-      summarize.md
-    rules/
-      dev-reference.md       (always)
-      design-system.md       (frontend projects)
-      database.md            (database projects)
-    agents/
-      project-bootstrap.md
-      summarize-chat.md
-      general-assistant.md
-      database-specialist.md (if database)
-      playwright-tester.md   (if Playwright)
-      code-reviewer.md       (team projects)
-      security-auditor.md    (team/production)
+    hooks/file-guard.js
+    commands/commit.md
+    commands/run-ci.md
+    commands/whats-next.md
+    commands/fix-pr.md
+    commands/summarize.md
+    rules/dev-reference.md
+    rules/design-system.md     (frontend)
+    rules/database.md          (database)
+    agents/project-bootstrap.md
+    agents/summarize-chat.md
+    agents/general-assistant.md
+    agents/database-specialist.md
+    agents/playwright-tester.md
+    agents/code-reviewer.md    (team)
+    agents/security-auditor.md (team)
 ```
-
-## Customizing Generated Files
-
-The bootstrap agent produces a starting point -- customize freely:
-
-- Edit `CLAUDE.md` to add project-specific conventions, architecture notes, and workflows
-- Edit agent files in `.claude/agents/` to tune specialist instructions
-- Edit rules files in `.claude/rules/` to fill in design tokens and DB conventions
-- Add new slash commands in `.claude/commands/` as markdown files
 
 ## Version History
 
-| Version | Installer | Notes |
-|---------|-----------|-------|
-| 2.0.0 | `claude-bootstrap-installer.sh` | Superpowers v5.1.0, hooks, commands, rules, MCP auto-config |
-| 1.0.0 | `archive/claude-bootstrap-v1.sh` | Initial release |
+| Version | Notes |
+|---------|-------|
+| 3.0.0 | Superpowers v5.1.0, hooks, commands, rules, MCP auto-config, examples |
+| 1.0.0 | Initial release (archived at `archive/claude-bootstrap-v1.sh`) |

@@ -1,212 +1,138 @@
 # Claude Code Bootstrap
 
-Set up Claude Code for any project in minutes - choose between Quick Setup or Detailed Planning.
+Set up Claude Code for any project in under 60 seconds — powered by the [Superpowers plugin](https://github.com/pcvelz/superpowers).
 
-## 🚀 Quick Start (Claude Code Users)
-
-Open Claude Code and paste this entire message:
-
-```
-Hello! I'm making a new project.
-
-If I don't already have a project folder, create one for me.
-
-Then install the Claude Code Bootstrap by running:
-curl -s https://raw.githubusercontent.com/C9-Tech-GtitHub/claude-code-bootstrap/main/claude-bootstrap-installer.sh | bash
-
-After installation completes, run the project-bootstrap agent to set up my project.
-```
-
-That's it! Claude Code will handle everything automatically.
-
-## Alternative: Terminal Install
+## Quick Start
 
 ```bash
-cd your-project
-bash <(curl -s https://raw.githubusercontent.com/C9-Tech-GtitHub/claude-code-bootstrap/main/claude-bootstrap-installer.sh)
+curl -fsSL https://raw.githubusercontent.com/C9-Tech-GtitHub/claude-code-bootstrap/main/claude-bootstrap-installer.sh | bash
 ```
 
-## ⚡ What's New in v2.0
+Then open Claude Code and say:
 
-**Two Setup Modes:**
-- **Quick Setup** (2 minutes) - Auto-detects tech stack, asks minimal questions, smart defaults
-- **Detailed Planning** (8 minutes) - Comprehensive customization, perfect for teams
-
-**Existing Project Support:**
-- Detects current CLAUDE.md configuration
-- Offers to update, add specialists, or start fresh
-- Never loses your existing setup
-
-**Smart Auto-Detection:**
-- Scans package.json, requirements.txt, docker-compose.yml
-- Detects frameworks, databases, deployment platforms
-- Identifies testing tools and CI/CD setup
-
-## 🎯 Choose Your Mode
-
-### ⚡ Quick Setup Mode (Recommended for most projects)
-
-**Perfect for:**
-- Getting started fast
-- Solo projects or small teams
-- Standard tech stacks
-- MVPs and prototypes
-
-**What happens:**
-1. Auto-detects your tech stack from project files
-2. Asks 2 quick questions (project purpose + AI needs)
-3. Generates optimized configuration with smart defaults
-4. Complete in ~2 minutes
-
-**Example:**
 ```
-🔍 Analyzing your project...
-
-✅ Detected:
-   - Framework: Next.js 14 + TypeScript
-   - Database: Supabase (from .env)
-   - UI: Tailwind CSS + shadcn/ui
-   - Deployment: Vercel
-
-📋 Quick questions:
-1. What does this project do?
-2. Will you need AI integration?
-
-Creating configuration... ✅ Done!
+Use the project-bootstrap agent to set up this project
 ```
 
-### 🎯 Detailed Planning Mode
+Answer 12 questions. Get a complete, structured Claude Code configuration.
 
-**Perfect for:**
-- Production applications
-- Team projects
-- Complex architectures
-- Enterprise/compliance needs
+## Re-bootstrap Safety
 
-**What happens:**
-1. Phase 1: Project basics (3 questions)
-2. Phase 2: Tech stack (comprehensive options)
-3. Phase 3: Testing & workflow
-4. Phase 4: Special requirements
-5. Custom configuration tailored exactly to your needs
-6. Complete in ~8 minutes
+Safe to re-run at any time. The bootstrap agent detects an existing `CLAUDE.md` and offers:
 
-## 🔄 Works with Existing Projects
+1. **Update** — add missing sections without touching existing content
+2. **Add Superpowers** — only insert the Superpowers workflow table
+3. **Regenerate** — full re-interview and replace all generated files
+4. **Cancel** — exit without any changes
 
-Already have CLAUDE.md? No problem! The bootstrap agent offers:
+Your existing setup is never silently overwritten.
 
-1. **Update** - Refresh existing config with new best practices
-2. **Add** - Keep current setup, add new specialists
-3. **Regenerate** - Backup current, create fresh
-4. **Cancel** - Keep everything as-is
+## What the Installer Creates
 
-## 📦 What Gets Generated
-
-### Always Created:
-- **CLAUDE.md** - Main configuration file
-- **general-assistant** - Day-to-day development
-
-### Auto-Included Based on Tech Stack:
-
-| Subagent | When Included | Tools |
-|----------|---------------|-------|
-| database-specialist | Database detected/selected | Supabase MCP, SQL, etc. |
-| playwright-tester | E2E testing (Playwright) | Playwright MCP |
-| deployment-specialist | Deployment platform | Platform-specific CLIs |
-| ai-integration-specialist | AI integration | OpenAI, Anthropic |
-| project-planner | Complex/enterprise projects | Plan mode |
-
-## 🎓 Examples
-
-### Quick Setup: Next.js SaaS
 ```
-⚡ Quick Setup (2 minutes)
-
-Auto-detected:
-✅ Next.js + TypeScript + Supabase + Vercel
-
-Generated:
-- general-assistant
-- database-specialist (Supabase MCP)
-- deployment-specialist (Vercel)
+.claude/
+  settings.json          # EnterPlanMode blocked; PreToolUse file-guard hook
+  hooks/
+    file-guard.js        # Blocks writes to .env* and credential files
+  commands/
+    commit.md            # /commit  — lint, stage, conventional commit
+    run-ci.md            # /run-ci  — iterate until lint + tests pass
+    whats-next.md        # /whats-next — session handoff document
+    fix-pr.md            # /fix-pr  — pull and address PR review comments
+    summarize.md         # /summarize — session summary
+  agents/
+    project-bootstrap.md # Bootstrap agent (runs the interview)
+    summarize-chat.md    # Session summarizer
 ```
 
-### Detailed Planning: Enterprise App
+## What the Bootstrap Agent Generates
+
+After the interview, the bootstrap agent creates:
+
+| File | Contents |
+|------|---------|
+| `CLAUDE.md` | Project overview, Superpowers workflow, Verification Gate, Token Efficiency, subagents table |
+| `.mcp.json` | MCP servers for Supabase, Playwright, GitHub (based on your stack) |
+| `.claude/settings.json` | PostToolUse lint hook added for Node.js projects |
+| `.claude/rules/dev-reference.md` | Superpowers skills + slash commands (auto-loaded every session) |
+| `.claude/rules/design-system.md` | Design token constraints (frontend projects) |
+| `.claude/rules/database.md` | Schema and migration conventions (database projects) |
+| `.claude/agents/general-assistant.md` | Always created |
+| `.claude/agents/database-specialist.md` | Supabase, Postgres, Firebase, or MongoDB variant |
+| `.claude/agents/playwright-tester.md` | Token-optimized E2E testing agent |
+| `.claude/agents/code-reviewer.md` | Critical/Major/Minor tagging (team projects) |
+| `.claude/agents/security-auditor.md` | OWASP Top 10 audit (team/production projects) |
+
+## Superpowers Plugin
+
+The installer auto-installs the [Superpowers plugin](https://github.com/pcvelz/superpowers) (v5.1.0). Every generated `CLAUDE.md` includes the full skills table.
+
+New feature → brainstorming → writing-plans → executing-plans → verification-before-completion → requesting-code-review → finishing-a-development-branch
+
+| Skill | Command |
+|-------|---------|
+| New feature idea | `/superpowers-extended-cc:brainstorming` |
+| Plan work | `/superpowers-extended-cc:writing-plans` |
+| Execute plan | `/superpowers-extended-cc:executing-plans` |
+| Write tests first | `/superpowers-extended-cc:test-driven-development` |
+| Debug | `/superpowers-extended-cc:systematic-debugging` |
+| Verify before claiming done | `/superpowers-extended-cc:verification-before-completion` |
+| Isolate work | `/superpowers-extended-cc:using-git-worktrees` |
+| Run parallel agents | `/superpowers-extended-cc:dispatching-parallel-agents` |
+| Review | `/superpowers-extended-cc:requesting-code-review` |
+| Ship | `/superpowers-extended-cc:finishing-a-development-branch` |
+
+## MCP Servers Auto-Configured
+
+| Stack | MCP Server |
+|-------|-----------|
+| Supabase | `@supabase/mcp-server-supabase@latest` |
+| Playwright testing | `@playwright/mcp@latest` |
+| GitHub repo | `@modelcontextprotocol/server-github@latest` |
+| Other database | `@modelcontextprotocol/server-filesystem@latest` (fallback) |
+
+## Security: file-guard.js Hook
+
+Every install wires a `PreToolUse` hook blocking Claude from writing to:
+
+- `.env`, `.env.*`, `.env.local`
+- `credentials.json`
+- `*.pem`, `*.key`, `*.p12`, `*.pfx`
+- `id_rsa`, `*.secret`
+
+These files must always be edited manually.
+
+## Example Outputs
+
+See `examples/` for complete generated `CLAUDE.md` files:
+
+- [`examples/nextjs-supabase/CLAUDE.md`](examples/nextjs-supabase/CLAUDE.md) — Next.js + Supabase SaaS
+- [`examples/python-fastapi/CLAUDE.md`](examples/python-fastapi/CLAUDE.md) — Python FastAPI + PostgreSQL
+- [`examples/react-firebase/CLAUDE.md`](examples/react-firebase/CLAUDE.md) — React + Firebase
+
+## Repository Layout
+
 ```
-🎯 Detailed Planning (8 minutes)
-
-Custom configuration for:
-- Complex microservices architecture
-- 15-person development team
-- SOC2 compliance requirements
-- Real-time features
-
-Generated:
-- general-assistant
-- database-specialist (compliance-focused)
-- playwright-tester
-- deployment-specialist (GitHub Actions)
-- ai-integration-specialist
-- project-planner (architecture + compliance)
+claude-bootstrap-installer.sh   # The only file you need
+README.md
+bootstrap/
+  README.md                     # Reference docs
+  TEMPLATE-CLAUDE.md            # CLAUDE.md template
+examples/
+  nextjs-supabase/CLAUDE.md
+  python-fastapi/CLAUDE.md
+  react-firebase/CLAUDE.md
+archive/
+  claude-bootstrap-v1.sh        # Previous version
 ```
 
-## 💡 Key Features
+## Requirements
 
-**Smart Auto-Detection:**
-- Reads package.json, requirements.txt, go.mod, Gemfile
-- Scans docker-compose.yml for services
-- Checks .env files for database/API keys
-- Detects CI/CD from .github/workflows/, .gitlab-ci.yml
+- `bash` 3.2+ (macOS default works)
+- `node` 18+ (for file-guard.js hook)
+- `claude` CLI (for Superpowers auto-install)
+- `npx` (for MCP servers at runtime)
 
-**Minimal & Focused:**
-- Only creates subagents you actually need
-- No bloat or unnecessary complexity
-- Can always add more specialists later
+## License
 
-**Team-Ready:**
-- Commit .claude/ to git
-- Team members get same setup on clone
-- Consistent development experience
-
-**Production-Ready:**
-- Best practices built-in
-- Security considerations included
-- Platform-specific optimizations
-
-## 📚 Learn More
-
-- [Full Documentation](bootstrap/README.md)
-- [Subagents Guide](https://code.claude.com/docs/en/sub-agents)
-- [Claude Code Docs](https://code.claude.com/docs)
-
-## 🆘 Quick Reference
-
-**Install:**
-```bash
-bash <(curl -s https://raw.githubusercontent.com/C9-Tech-GtitHub/claude-code-bootstrap/main/claude-bootstrap-installer.sh)
-```
-
-**Run Bootstrap:**
-```
-> Use the project-bootstrap agent to set up this project
-```
-
-**Choose Mode:**
-- Quick Setup: 2 minutes, auto-detection
-- Detailed Planning: 8 minutes, full customization
-
-**Commit:**
-```bash
-git add CLAUDE.md .claude/
-git commit -m "feat: Add Claude Code configuration"
-```
-
-**Update Later:**
-```
-> Use the project-bootstrap agent to set up this project
-[Choose: Update existing configuration]
-```
-
----
-
-**Version 2.0** - Now with Quick Setup mode and existing project detection!
+MIT

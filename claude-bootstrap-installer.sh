@@ -1,693 +1,779 @@
-#!/bin/bash
-################################################################################
-# Claude Code Bootstrap - Single-File Installer
-#
-# Drop this file into ANY new project and run:
-#   bash claude-bootstrap-installer.sh
-#
-# It will:
-# 1. Create .claude directory structure
-# 2. Install the project-bootstrap agent
-# 3. Guide you to set up your project
-#
-# Author: Claude Code Bootstrap System
-# Version: 2.0.0
-# New: Quick Setup + Detailed Planning modes + Existing project detection
-################################################################################
+#!/usr/bin/env bash
+# =============================================================================
+# Claude Code Bootstrap Installer v3.0.0
+# Installs Superpowers plugin and sets up .claude/ skeleton for any project.
+# Usage: bash claude-bootstrap-installer.sh
+# =============================================================================
 
-set -e
+set -euo pipefail
 
-clear
-echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║                                                                ║"
-echo "║          🚀 Claude Code Bootstrap Installer v2.0.0            ║"
-echo "║                                                                ║"
-echo "║     ⚡ Quick Setup (2 min) or 🎯 Detailed Planning (8 min)    ║"
-echo "║     🔄 Works with existing projects too!                      ║"
-echo "║                                                                ║"
-echo "╚════════════════════════════════════════════════════════════════╝"
+SUPERPOWERS_VERSION="5.1.0"
+CLAUDE_DIR=".claude"
+
+# ── Colors ────────────────────────────────────────────────────────────────────
+BOLD='\033[1m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RESET='\033[0m'
+
+info()    { printf "${CYAN}[info]${RESET}  %s\n" "$*"; }
+success() { printf "${GREEN}[ok]${RESET}    %s\n" "$*"; }
+warn()    { printf "${YELLOW}[warn]${RESET}  %s\n" "$*"; }
+header()  { printf "\n${BOLD}%s${RESET}\n" "$*"; }
+
+printf "${BOLD}${CYAN}"
+printf " Claude Code Bootstrap Installer v3.0.0\n"
+printf " Set up Claude Code for any project in under 60 seconds.\n"
+printf "${RESET}\n"
+
+info "Superpowers version: ${SUPERPOWERS_VERSION}"
+info "Target: $(pwd)"
 echo ""
 
-# Check if .claude already exists
-if [ -d ".claude" ]; then
-    echo "⚠️  Warning: .claude directory already exists!"
-    echo "🗑️  Backing up existing .claude to .claude.backup..."
-    if [ -d ".claude.backup" ]; then
-        rm -rf .claude.backup
-    fi
-    mv .claude .claude.backup
+# ── Preflight ─────────────────────────────────────────────────────────────────
+header "Preflight checks"
+
+if ! command -v claude &>/dev/null; then
+  warn "claude CLI not found — install from https://claude.ai/code before running bootstrap agent"
+fi
+if ! command -v node &>/dev/null; then
+  warn "node not found — required for file-guard.js hook (https://nodejs.org)"
 fi
 
-# Create directory structure
-echo "📁 Creating .claude directory structure..."
-mkdir -p .claude/agents
-mkdir -p .claude/bootstrap/templates
+# ── Step 1: Superpowers plugin ────────────────────────────────────────────────
+header "Step 1 — Installing Superpowers plugin v${SUPERPOWERS_VERSION}"
 
-# Create project-bootstrap agent (embedded)
-echo "🤖 Installing project-bootstrap agent..."
-cat > .claude/agents/project-bootstrap.md << 'AGENT_CONTENT_EOF'
+if command -v claude &>/dev/null; then
+  if claude plugin list 2>/dev/null | grep -q "superpowers-extended-cc"; then
+    success "Superpowers already installed"
+  else
+    info "Adding marketplace..."
+    claude plugin marketplace add pcvelz/superpowers 2>&1 | grep -E "Successfully|Error" || true
+    info "Installing plugin..."
+    if claude plugin install "superpowers-extended-cc@superpowers-extended-cc-marketplace" --scope user 2>&1 | grep -q "Successfully"; then
+      success "Superpowers installed (restart Claude Code to activate)"
+    else
+      warn "Could not auto-install. Run manually:"
+      warn "  claude plugin marketplace add pcvelz/superpowers"
+      warn "  claude plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace --scope user"
+    fi
+  fi
+else
+  warn "Skipping (claude CLI not available). After installing Claude Code, run:"
+  warn "  claude plugin marketplace add pcvelz/superpowers"
+  warn "  claude plugin install superpowers-extended-cc@superpowers-extended-cc-marketplace --scope user"
+fi
+
+# ── Step 2: Directory skeleton ────────────────────────────────────────────────
+header "Step 2 — Creating .claude/ skeleton"
+mkdir -p "${CLAUDE_DIR}/agents"
+mkdir -p "${CLAUDE_DIR}/commands"
+mkdir -p "${CLAUDE_DIR}/hooks"
+mkdir -p "${CLAUDE_DIR}/rules"
+success "Directories created"
+
+# ── Step 3: settings.json ─────────────────────────────────────────────────────
+header "Step 3 — Writing .claude/settings.json"
+
+if [[ -f "${CLAUDE_DIR}/settings.json" ]]; then
+  warn "settings.json already exists — skipping (bootstrap agent will update it)"
+else
+  cat > "${CLAUDE_DIR}/settings.json" << 'SETTINGS_EOF'
+{
+  "permissions": {
+    "deny": ["EnterPlanMode"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/file-guard.js"
+          }
+        ]
+      }
+    ]
+  }
+}
+SETTINGS_EOF
+  success "settings.json written"
+fi
+
+# ── Step 4: file-guard.js ─────────────────────────────────────────────────────
+header "Step 4 — Writing .claude/hooks/file-guard.js"
+
+cat > "${CLAUDE_DIR}/hooks/file-guard.js" << 'FILEGUARD_EOF'
+#!/usr/bin/env node
+// file-guard.js — Blocks writes to .env* and credential files.
+// Runs as a PreToolUse hook on every Write/Edit tool call.
+
+const fs = require('fs');
+
+let input = {};
+try {
+  input = JSON.parse(fs.readFileSync('/dev/stdin', 'utf8'));
+} catch (e) {
+  process.exit(0);
+}
+
+const filePath = input.file_path || input.path || '';
+const filename = filePath.split('/').pop();
+
+const blocked = [
+  /^\.env$/,
+  /^\.env\./,
+  /^credentials\.json$/,
+  /\.pem$/,
+  /\.key$/,
+  /\.p12$/,
+  /\.pfx$/,
+  /^id_rsa$/,
+  /^id_ed25519$/,
+  /\.secret$/,
+];
+
+if (blocked.some(pattern => pattern.test(filename))) {
+  process.stderr.write(
+    `[file-guard] BLOCKED: Writing to '${filePath}' is not allowed.\n` +
+    `Edit credential files manually in your terminal.\n`
+  );
+  process.exit(1);
+}
+FILEGUARD_EOF
+
+success "file-guard.js written"
+
+# ── Step 5: Slash commands ────────────────────────────────────────────────────
+header "Step 5 — Writing slash commands"
+
+cat > "${CLAUDE_DIR}/commands/commit.md" << 'COMMIT_EOF'
+Run lint, stage changes, and create a conventional commit.
+
+Steps:
+1. Run the project lint command (npm run lint, ruff check ., etc.) — fix any errors before continuing
+2. Stage changed files. Never stage: .env*, credentials.json, *.pem, *.key, id_rsa
+3. Summarize what changed in 1-2 sentences
+4. Create commit with format: `type(scope): description`
+   Common types: feat, fix, refactor, test, chore, docs
+5. Show the commit hash
+COMMIT_EOF
+
+cat > "${CLAUDE_DIR}/commands/run-ci.md" << 'RUNCI_EOF'
+Run the full lint and test suite, iterating until everything passes.
+
+Steps:
+1. Run lint — fix all errors, re-run until output is clean
+2. Run tests — fix all failures, re-run until all pass
+3. Show final passing output
+RUNCI_EOF
+
+cat > "${CLAUDE_DIR}/commands/whats-next.md" << 'WHATSNEXT_EOF'
+Generate a session handoff document.
+
+Steps:
+1. Review what was accomplished in this session
+2. Identify all files changed and what changed in each
+3. Draft a handoff doc with these sections:
+   - **Session Summary** — what was built or fixed (2-4 sentences)
+   - **Files Changed** — list with one-line description per file
+   - **Current State** — what is working, broken, or partial
+   - **What's Next** — prioritized remaining work
+   - **Blockers / Decisions Needed** — anything requiring human judgment
+4. Save to `.claude/handoff-[YYYY-MM-DD].md`
+5. Confirm the file was saved
+WHATSNEXT_EOF
+
+cat > "${CLAUDE_DIR}/commands/fix-pr.md" << 'FIXPR_EOF'
+Pull latest changes and address all PR review comments.
+
+Steps:
+1. `git fetch && git pull` — get latest
+2. Read PR review comments via `gh pr view --comments` (if gh CLI available) or ask user to paste them
+3. Group by severity: Critical → Major → Minor
+4. Address every comment in order — show before/after for each change
+5. Run lint and tests — fix any regressions
+6. Commit: `fix: address PR review comments`
+7. Show summary of all changes made
+FIXPR_EOF
+
+cat > "${CLAUDE_DIR}/commands/summarize.md" << 'SUMMARIZE_EOF'
+Summarize this conversation using the summarize-chat agent.
+
+Invoke the summarize-chat agent to produce a structured summary:
+1. **Problem tackled** — the goal or issue at the start
+2. **Approaches tried** — strategies attempted, including what didn't work
+3. **Current state** — what is working and what is not
+4. **What's next** — the single most important next action
+
+Keep under 300 words. Format with clear headers.
+SUMMARIZE_EOF
+
+success "5 slash commands written"
+
+# ── Step 6: project-bootstrap agent ──────────────────────────────────────────
+header "Step 6 — Writing project-bootstrap agent"
+
+cat > "${CLAUDE_DIR}/agents/project-bootstrap.md" << 'BOOTSTRAP_AGENT_EOF'
 ---
 name: project-bootstrap
-description: First-time project setup agent that interviews you about your project and generates custom CLAUDE.md and subagent configuration. Use ONLY when setting up a new project from scratch.
-tools: mcp__acp__Read, mcp__acp__Write, Grep, Glob
+description: First-time project setup agent. Interviews you and generates CLAUDE.md, subagents, .mcp.json, rules files, and settings hooks. Safe to re-run — detects existing CLAUDE.md and offers update options.
+tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 permissionMode: acceptEdits
 ---
 
-You are a project bootstrap specialist that helps set up new projects with optimal Claude Code configuration.
-
-## Your Purpose
-
-When invoked, you:
-1. **Interview** the user about their project
-2. **Design** a custom CLAUDE.md configuration
-3. **Generate** appropriate subagents based on tech stack
-4. **Create** the files in `.claude/` directory
-5. **Explain** how to use the setup
-
-## Interview Process
-
-### Phase 1: Project Basics (2-3 questions)
-```
-1. What is this project about? (1-2 sentence description)
-2. What problem does it solve?
-3. Who are the primary users?
-```
-
-### Phase 2: Technology Stack (Multiple choice)
-```
-Framework/Language:
-- [ ] Next.js / React / TypeScript
-- [ ] Vue / Nuxt
-- [ ] Python / Django / Flask
-- [ ] Node.js / Express
-- [ ] Ruby / Rails
-- [ ] Go
-- [ ] Other: ___________
-
-Database:
-- [ ] Supabase (PostgreSQL + Auth + Storage)
-- [ ] PostgreSQL
-- [ ] MySQL / MariaDB
-- [ ] MongoDB
-- [ ] Firebase / Firestore
-- [ ] SQLite
-- [ ] None / TBD
-- [ ] Other: ___________
-
-UI Library:
-- [ ] shadcn/ui (Radix + Tailwind)
-- [ ] Material UI
-- [ ] Tailwind CSS (utility-first)
-- [ ] Bootstrap
-- [ ] Chakra UI
-- [ ] Custom CSS
-- [ ] None / Minimal styling
-- [ ] Other: ___________
-
-AI Integration:
-- [ ] Yes - OpenAI (GPT models)
-- [ ] Yes - Anthropic (Claude)
-- [ ] Yes - Other provider
-- [ ] Maybe later
-- [ ] No
-
-Deployment Platform:
-- [ ] Vercel
-- [ ] Netlify
-- [ ] AWS (EC2, Lambda, etc.)
-- [ ] Google Cloud
-- [ ] Heroku
-- [ ] Docker / Self-hosted
-- [ ] Railway / Render
-- [ ] Not decided yet
-- [ ] Other: ___________
-```
-
-### Phase 3: Testing & Workflow
-```
-Testing needs:
-- [ ] E2E browser testing (Playwright recommended)
-- [ ] E2E with Cypress
-- [ ] Unit tests only (Jest, Vitest, pytest, etc.)
-- [ ] Integration tests
-- [ ] None yet (will add later)
-
-Git workflow:
-- [ ] Direct commits to main
-- [ ] Feature branches + PR reviews
-- [ ] Git flow (develop + release branches)
-- [ ] Trunk-based development
-
-Deployment automation:
-- [ ] Yes - auto-deploy on push to main
-- [ ] Yes - manual approval required
-- [ ] No - manual deployments only
-```
-
-### Phase 4: Special Requirements
-```
-Any special requirements?
-- Monorepo structure?
-- Microservices architecture?
-- Specific security/compliance needs?
-- Required libraries or frameworks?
-- Team size and collaboration needs?
-```
-
-## Subagent Selection Logic
-
-Based on user answers, intelligently create only needed subagents:
-
-### ✅ Always Create:
-**general-assistant** - Day-to-day development, code editing, file operations
-
-### Conditional Subagents:
-
-#### Database (if any database selected):
-**Supabase:**
-```yaml
-name: database-specialist
-tools: mcp__supabase__*, mcp__acp__Read, Grep, Glob
-Key features:
-- Schema migrations with apply_migration
-- Security advisors (run after DDL)
-- RLS policy guidance
-- Edge Functions support
-```
-
-**PostgreSQL / MySQL:**
-```yaml
-name: database-specialist
-tools: mcp__acp__Read, mcp__acp__Bash, Grep, Glob
-Key features:
-- SQL migration patterns
-- Query optimization
-- Index recommendations
-- Transaction best practices
-```
-
-**MongoDB:**
-```yaml
-name: database-specialist
-tools: mcp__acp__Read, mcp__acp__Bash, Grep, Glob
-Key features:
-- Schema design patterns
-- Aggregation pipelines
-- Index optimization
-- Query performance
-```
-
-#### Testing (if E2E selected):
-**Playwright:**
-```yaml
-name: playwright-tester
-tools: mcp__playwright__*, mcp__acp__Read, mcp__acp__Bash
-Key features:
-- Token-optimized workflows (prefer screenshots)
-- Browser automation
-- Bug reproduction
-- Production verification
-- Console/network debugging
-```
-
-**Cypress:**
-```yaml
-name: cypress-tester
-tools: mcp__acp__Read, mcp__acp__Bash, Grep, Glob
-Key features:
-- Component testing
-- E2E test workflows
-- Fixture management
-- CI/CD integration
-```
-
-#### Deployment (if platform selected):
-**Vercel:**
-```yaml
-name: deployment-specialist
-tools: mcp__acp__Bash, mcp__acp__Read
-model: haiku
-permissionMode: acceptEdits
-Key features:
-- Git workflow automation
-- vercel CLI commands
-- Production verification coordination
-- Environment variable management
-```
-
-**Netlify / AWS / Docker:**
-(Similar structure, platform-specific commands)
-
-#### AI Integration (if AI selected):
-**OpenAI:**
-```yaml
-name: ai-integration-specialist
-tools: mcp__acp__Read, mcp__acp__Edit, mcp__acp__Write, Grep, Glob
-Key features:
-- GPT-5 series models (gpt-5-nano, gpt-5.1)
-- Parameter migration (reasoning.effort, text.verbosity)
-- Structured output (JSON mode)
-- Cost optimization ($0.10/$0.40 for gpt-5-nano)
-- Token management
-```
-
-**Anthropic Claude:**
-(Similar structure, Claude-specific patterns)
-
-#### Planning (if complex project):
-**Multi-phase / Large team:**
-```yaml
-name: project-planner
-tools: mcp__acp__Read, Grep, Glob
-model: sonnet
-permissionMode: plan
-Key features:
-- Strategic roadmap planning
-- Architecture decisions
-- Risk analysis
-- Multi-phase implementation
-```
-
-## CLAUDE.md Generation Template
-
-Generate a complete, tailored CLAUDE.md:
-
-```markdown
-# [PROJECT_NAME] - Claude Configuration
-
-> **Auto-generated by project-bootstrap on [DATE]**
-
-## 📁 Repository Information
-
-**Git Repository:** [If available from git remote]
-- Owner: [OWNER]
-- Repository: [REPO]
-- Main Branch: [main/master/develop]
-
-## 📖 Project Overview
-
-[USER'S PROJECT DESCRIPTION]
-
-**Purpose:** [What problem it solves]
-**Users:** [Primary users]
-
-**Tech Stack:**
-- **Framework:** [FRAMEWORK]
-- **Language:** [LANGUAGE]
-- **Database:** [DATABASE]
-- **UI Library:** [UI_LIBRARY]
-- **Deployment:** [PLATFORM]
-[Additional tech as needed]
-
-## 🤖 Subagents (Specialized AI Assistants)
-
-This project uses specialized subagents to optimize context usage and task efficiency.
-
-### Available Subagents
-
-| Subagent | Purpose | When to Use |
-|----------|---------|-------------|
-[Generated table with only included subagents]
-
-### How to Use Subagents
-
-**Automatic Invocation:**
-Claude will automatically delegate tasks to the appropriate subagent.
-
-**Explicit Invocation:**
-```
-> Use the [agent-name] to [task description]
-```
-
-**Examples:**
-[Tech-specific examples]
-
-### Subagent Files
-
-All subagents are in `.claude/agents/`:
-[List only created agents]
-
-## Development Workflow
-
-[Based on their git workflow and deployment answers]
-
-### Default Workflow:
-1. 📋 Track tasks with TodoWrite
-2. 🛠️ Implement changes
-3. ✅ Test locally [if testing enabled]
-4. 🚀 Deploy [if deployment automation]
-5. 🌐 Verify on production [if deployment automation]
-
-[Only include sections relevant to their stack:]
-
-## [TECH_SPECIFIC_SECTIONS]
-
-[For AI projects:]
-### 🤖 AI Model Configuration
-[OpenAI/Anthropic specific guidance]
-
-[For database projects:]
-### 📊 Database Guidelines
-[Database-specific best practices]
-
-[For testing projects:]
-### 🧪 Testing Guidelines
-[Testing framework specifics]
-
-[For deployment automation:]
-### 🚀 Deployment Workflow
-[Platform-specific deployment steps]
-
-## Quick Reference
-
-| Task | Tool/Command |
-|------|-------------|
-[Generated based on tech stack]
-```
-
-## File Generation Process
-
-### Step 1: Collect Information
-- Ask questions in logical groups
-- Provide clear multiple choice options
-- Show progress (Phase 1 of 4, etc.)
-- Allow "Other" or "TBD" responses
-
-### Step 2: Analyze & Plan
-```
-Analyzing your answers...
-✅ Framework: Next.js + TypeScript
-✅ Database: Supabase
-✅ Testing: Playwright
-✅ Deployment: Vercel
-✅ AI: OpenAI (GPT-5 series)
-
-Recommended subagents:
-✅ general-assistant (always)
-✅ database-specialist (Supabase MCP)
-✅ playwright-tester (E2E testing)
-✅ deployment-specialist (Vercel)
-✅ ai-integration-specialist (OpenAI)
-✅ project-planner (complex multi-phase project)
-```
-
-### Step 3: Generate Files
-Create files progressively with clear feedback:
-```
-Creating CLAUDE.md... ✅ (487 lines)
-Creating .claude/agents/general-assistant.md... ✅
-Creating .claude/agents/database-specialist.md... ✅
-Creating .claude/agents/playwright-tester.md... ✅
-Creating .claude/agents/deployment-specialist.md... ✅
-Creating .claude/agents/ai-integration-specialist.md... ✅
-Creating .claude/agents/project-planner.md... ✅
-Creating .claude/bootstrap/setup-log.md... ✅
-```
-
-### Step 4: Document Setup
-Create setup-log.md:
-```markdown
-# Bootstrap Setup Log
-
-**Date:** [TIMESTAMP]
-**Project:** [NAME]
-
-## Interview Answers
-[Record all answers]
-
-## Generated Configuration
-- CLAUDE.md: [SIZE] lines
-- Subagents created: [COUNT]
-
-## Subagent Details
-[List each with rationale]
-
-## Tech Stack
-[Full stack list]
-
-## Next Steps
-[Customization suggestions]
-```
-
-### Step 5: Summary & Instructions
-```
-✅ Project setup complete!
-
-📄 Files Created:
-- CLAUDE.md (487 lines)
-- .claude/agents/general-assistant.md
-- .claude/agents/database-specialist.md (Supabase MCP)
-- .claude/agents/playwright-tester.md (token-optimized)
-- .claude/agents/deployment-specialist.md (Vercel)
-- .claude/agents/ai-integration-specialist.md (GPT-5)
-- .claude/agents/project-planner.md
-- .claude/bootstrap/setup-log.md
-
-🤖 Your Subagents:
-1. **general-assistant** - Day-to-day development tasks
-2. **database-specialist** - Supabase operations, migrations, RLS
-3. **playwright-tester** - E2E testing, bug reproduction
-4. **deployment-specialist** - Git + Vercel deployments
-5. **ai-integration-specialist** - OpenAI GPT-5 integration
-6. **project-planner** - Strategic planning & architecture
-
-💡 Recommended MCPs:
-- Supabase (database + auth workflows)
-- Chrome DevTools (browser debugging)
-- Playwright (E2E automation)
-
-💡 How to Use:
-- Claude automatically delegates to specialists
-- Or invoke explicitly: "Use database-specialist to create a users table"
-- Review/customize files in .claude/agents/
-
-📝 Next Steps:
-1. Review CLAUDE.md and customize for your team
-2. Update repository information (if not auto-detected)
-3. Add project-specific guidelines
-4. Commit to git: git add CLAUDE.md .claude/ && git commit -m "feat: Add Claude Code configuration"
-
-🎉 All set! Your team will get the same setup when they clone the repo.
-```
-
-## Best Practices
-
-### Keep It Minimal
-- Only create subagents that will actually be used
-- Don't include "maybe later" features
-- User can always add more agents later
-
-### Be Specific
-- Use actual library names (not "React library")
-- Include version numbers if critical
-- Reference real file paths and commands
-
-### Be Helpful
-- Explain why each subagent was included
-- Provide examples specific to their stack
-- Include links to documentation
-- Suggest next steps
-
-### Be Adaptable
-- Offer sensible defaults if user is unsure
-- Allow "TBD" or "will decide later" answers
-- Offer to regenerate if they change their mind
-
-## Error Handling
-
-**If user is unsure:**
-```
-No problem! I can suggest defaults based on common patterns:
-- For [FRAMEWORK], most teams use [DEFAULT]
-- We can always regenerate if you decide differently
-
-Would you like me to use [DEFAULT] for now? (yes/no)
-```
-
-**If incompatible choices:**
-```
-⚠️ I noticed you selected [X] and [Y] which typically don't work together.
-
-Did you mean:
-- [OPTION_A] with [COMPATIBLE_CHOICE]
-- [OPTION_B] with [OTHER_COMPATIBLE]
-
-Or is this a special setup?
-```
-
-## Important Notes
-
-**When to Use This Agent:**
-✅ Brand new project setup
-✅ Migrating project to Claude Code
-✅ Complete configuration overhaul
-
-**When NOT to Use:**
-❌ Project already has CLAUDE.md
-❌ Just adding one subagent
-❌ Minor tweaks to existing setup
-
-## Response Guidelines
-
-- Ask 2-3 questions at a time (don't overwhelm)
-- Use clear multiple choice when possible
-- Show progress indicators
-- Create files progressively (show what you're doing)
-- Provide clear summary at the end
-- Include commit command in final instructions
-
-Remember: Your goal is a **tailored, minimal, production-ready** setup that gives the user exactly what they need for their specific project.
-AGENT_CONTENT_EOF
-
-# Create README
-echo "📖 Creating README..."
-cat > .claude/bootstrap/README.md << 'README_CONTENT_EOF'
-# Claude Code Bootstrap System
-
-## 🚀 Quick Start
-
-1. **Invoke the bootstrap agent:**
-   ```
-   > Use the project-bootstrap agent to set up this project
-   ```
-
-2. **Answer questions about your tech stack**
-
-3. **Get your custom CLAUDE.md + subagents instantly!**
-
-4. **Commit to git:**
-   ```bash
-   git add CLAUDE.md .claude/
-   git commit -m "feat: Add Claude Code configuration"
-   ```
-
-## 🎯 What Gets Generated
-
-**Always:**
-- CLAUDE.md (main configuration)
-- general-assistant (day-to-day development)
-
-**Conditional (based on your answers):**
-- database-specialist (if using database)
-- playwright-tester (if E2E testing)
-- deployment-specialist (if deployment automation)
-- ai-integration-specialist (if AI features)
-- project-planner (if complex project)
-
-## 📚 Examples
-
-**Simple React App:**
-- general-assistant
-- deployment-specialist (Netlify)
-
-**Full-Stack SaaS:**
-- general-assistant
-- database-specialist (Supabase)
-- playwright-tester
-- deployment-specialist (Vercel)
-- ai-integration-specialist (OpenAI)
-- project-planner
-
-**Python API:**
-- general-assistant
-- database-specialist (PostgreSQL)
-- deployment-specialist (Docker)
-
-## 💡 Tips
-
-- Start minimal - add specialists later if needed
-- Customize generated files for your team
-- Keep .claude/ in git for team consistency
-- Re-run bootstrap if your stack changes
-
-## 🔄 Re-running Bootstrap
-
-```bash
-# Backup current config
-mv CLAUDE.md CLAUDE.md.backup
-mv .claude/agents .claude/agents.backup
-
-# Re-run bootstrap agent
-> Use the project-bootstrap agent to set up this project
-
-# Compare and merge
-diff CLAUDE.md CLAUDE.md.backup
-```
-
-## 📖 Learn More
-
-- [Subagents Docs](https://code.claude.com/docs/en/sub-agents)
-- [Claude Code Docs](https://code.claude.com/docs)
+You are a project bootstrap specialist. Your job: interview the user, then generate a complete Claude Code configuration tailored to their project and powered by Superpowers.
+
+## Re-bootstrap Safety
+
+First, check if CLAUDE.md exists in the project root.
+
+If it exists:
+1. **Update** — add missing sections (Verification Gate, Token Efficiency, Superpowers workflow)
+2. **Add Superpowers** — only insert the Superpowers workflow section
+3. **Regenerate** — full re-interview, replace all generated files
+4. **Cancel** — exit without changes
+
+Never silently overwrite an existing CLAUDE.md.
+
+## Interview
+
+Ask all questions at once in a numbered list:
+
+1. Project name?
+2. What does it do and who uses it? (1-2 sentences)
+3. Framework / language? (Next.js, React, Vue, Python/FastAPI, Python/Django, Node/Express, Ruby/Rails, Go, other)
+4. Database? (Supabase, PostgreSQL, MySQL, MongoDB, Firebase/Firestore, SQLite, none, other)
+5. UI library? (shadcn/ui, Tailwind CSS, Material UI, Bootstrap, Chakra UI, custom, none)
+6. Testing? (Playwright E2E, Jest/Vitest unit, pytest, Cypress, none)
+7. Deployment? (Vercel, Netlify, AWS, Heroku, Docker, Railway, other, none)
+8. AI integration? (OpenAI, Anthropic Claude, other, none)
+9. Team size? (solo/prototype, small team, team/production)
+10. GitHub repo URL? (or "none")
+11. Lint command? (e.g. `npm run lint`, `ruff check .` — blank if unsure)
+12. Test command? (e.g. `npm test`, `pytest` — blank if unsure)
+
+## Stack Flags
+
+After collecting answers, set these flags internally:
+
+- IS_FRONTEND: Next.js, React, Vue, or Nuxt
+- IS_NODEJS: Next.js, React, Vue, Nuxt, or Node/Express
+- HAS_SUPABASE: Supabase selected
+- HAS_POSTGRES: PostgreSQL (not Supabase)
+- HAS_FIREBASE: Firebase/Firestore
+- HAS_MONGO: MongoDB
+- HAS_DATABASE: any database
+- HAS_PLAYWRIGHT: Playwright selected
+- HAS_GITHUB: GitHub URL provided
+- IS_TEAM: small team or team/production
+- IS_PRODUCTION: team/production
+
+## Generation Steps
+
+Run all steps after the interview. Show a progress line for each.
 
 ---
 
-**Installed with claude-bootstrap-installer.sh v1.0.0**
-README_CONTENT_EOF
+### Step A — .mcp.json
 
-# Create general assistant template
-echo "📝 Creating templates..."
-cat > .claude/bootstrap/templates/general-assistant.md << 'TEMPLATE_CONTENT_EOF'
+Create `.mcp.json` in the project root (merge if exists).
+
+Build mcpServers based on flags:
+- HAS_SUPABASE → `"supabase"`: command `npx`, args `["-y", "@supabase/mcp-server-supabase@latest", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]`
+- HAS_PLAYWRIGHT → `"playwright"`: command `npx`, args `["-y", "@playwright/mcp@latest"]`
+- HAS_GITHUB → `"github"`: command `npx`, args `["-y", "@modelcontextprotocol/server-github@latest"]`, env `{"GITHUB_TOKEN": "${GITHUB_TOKEN}"}`
+- HAS_DATABASE (no specific MCP matched) → `"filesystem"`: command `npx`, args `["-y", "@modelcontextprotocol/server-filesystem@latest", "."]`
+
+If none apply: write `{ "mcpServers": {} }`.
+
+---
+
+### Step B — Lint hook
+
+If IS_NODEJS and lint command was provided:
+
+Read `.claude/settings.json`, add PostToolUse hook:
+
+```json
+"PostToolUse": [
+  {
+    "matcher": "Write|Edit",
+    "hooks": [{ "type": "command", "command": "LINT_CMD 2>/dev/null || true", "background": true }]
+  }
+]
+```
+
+Replace LINT_CMD with the actual lint command. Use Edit to make a targeted update.
+
+---
+
+### Step C — Rules files
+
+**Always generate** `.claude/rules/dev-reference.md`:
+
+```markdown
+---
+description: Auto-loaded every session — Superpowers skills and slash commands quick reference
+---
+# Dev Reference
+
+## Superpowers Workflow
+New feature → brainstorming → writing-plans → executing-plans → verification-before-completion → requesting-code-review → finishing-a-development-branch
+
+Specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+
+## Skills
+| Need | Skill |
+|------|-------|
+| New feature idea | /superpowers-extended-cc:brainstorming |
+| Plan work | /superpowers-extended-cc:writing-plans |
+| Execute plan | /superpowers-extended-cc:executing-plans |
+| Write tests first | /superpowers-extended-cc:test-driven-development |
+| Debug systematically | /superpowers-extended-cc:systematic-debugging |
+| Verify before claiming done | /superpowers-extended-cc:verification-before-completion |
+| Isolate work on a branch | /superpowers-extended-cc:using-git-worktrees |
+| Run parallel agents | /superpowers-extended-cc:dispatching-parallel-agents |
+| Request code review | /superpowers-extended-cc:requesting-code-review |
+| Ship / clean up branch | /superpowers-extended-cc:finishing-a-development-branch |
+
+## Commands
+- /commit — lint, stage, conventional commit
+- /run-ci — iterate lint + tests until clean
+- /whats-next — session handoff doc
+- /fix-pr — pull and fix PR review comments
+- /summarize — summarize current session
+```
+
+**If IS_FRONTEND**, generate `.claude/rules/design-system.md`:
+
+```markdown
+---
+description: Design system constraints — loaded when editing UI components
+globs: components/**,app/**,src/**,pages/**
+---
+# Design System
+
+## UI Library
+[PROJECT_UI_LIBRARY]
+
+## Color Tokens
+<!-- Fill in: primary, secondary, accent, background, foreground -->
+
+## Typography
+<!-- Fill in: font families, size scale, heading weights -->
+
+## Spacing
+<!-- Fill in: spacing scale, padding conventions -->
+
+## Component Conventions
+- All new components go in `components/`
+- Use existing primitives before creating new ones
+- PascalCase components, kebab-case filenames
+- All interactive elements must have accessible labels
+```
+
+**If HAS_DATABASE**, generate `.claude/rules/database.md`:
+
+```markdown
+---
+description: Database schema conventions — loaded when editing DB files
+globs: **/migrations/**,**/schema*,**/models/**,prisma/**,supabase/**,**/seeds/**
+---
+# Database Rules
+
+## Database
+[PROJECT_DATABASE]
+
+## Schema Conventions
+- Table names: snake_case, plural
+- Column names: snake_case
+- Primary keys: `id` (uuid preferred)
+- Timestamps: `created_at`, `updated_at` on every table
+
+## Migration Rules
+- Never drop columns in one step — deprecate, migrate data, remove in follow-up PR
+- All migrations must be reversible
+
+## Query Conventions
+- Always use parameterized queries — never string interpolation
+- Prefer indexed columns in WHERE clauses
+- Use EXPLAIN ANALYZE for queries touching more than 10k rows
+
+## Row-Level Security
+- Every user-facing table must have RLS enabled
+- Default deny — grant explicitly
+- Test RLS policies before marking a feature complete
+```
+
+---
+
+### Step D — Subagents
+
+Create in `.claude/agents/`. Do not overwrite existing files unless user chose Regenerate.
+
+**Always create: `general-assistant.md`**
+
+```markdown
 ---
 name: general-assistant
-description: General-purpose development assistant for {{PROJECT_TYPE}}. Use for code editing, file operations, and general development tasks.
-tools: mcp__acp__Read, mcp__acp__Write, mcp__acp__Edit, Grep, Glob, mcp__acp__Bash
+description: General-purpose development assistant for [PROJECT_NAME]. Code editing, refactoring, debugging, and tasks not covered by specialists.
+tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
 
-You are a general-purpose development assistant for {{PROJECT_NAME}}.
+You are a general-purpose development assistant for [PROJECT_NAME].
 
-## Your Role
-- Code editing and refactoring
-- File operations
-- Debugging and troubleshooting
-- General development support
+## Project
+[DESCRIPTION]
 
-## Tech Stack
-{{TECH_STACK}}
+## Stack
+[STACK_FROM_INTERVIEW]
 
-## Best Practices
-{{BEST_PRACTICES}}
+## Responsibilities
+- Code editing, refactoring, implementation
+- Debugging and root-cause analysis
+- File operations and project navigation
 
-Delegate specialized tasks to appropriate subagents when available.
-TEMPLATE_CONTENT_EOF
+## Delegate To
+- Database operations → database-specialist
+- E2E testing → playwright-tester
+- Code review → code-reviewer
+- Security → security-auditor
+```
 
-# Success message
+**If HAS_SUPABASE, create `database-specialist.md`**
+
+```markdown
+---
+name: database-specialist
+description: Supabase expert for [PROJECT_NAME]. Schema changes, migrations, RLS policies, Edge Functions.
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__supabase__*
+model: sonnet
+---
+
+You are a Supabase database specialist for [PROJECT_NAME].
+
+## Critical Rules
+- Use `information_schema.columns` for schema queries — never `list_tables` (14k tokens)
+- Always check existing RLS policies before adding a new table
+- Run `supabase db diff` before applying migrations
+
+## Migration Workflow
+1. `supabase db diff -f migration_name`
+2. Review the SQL carefully
+3. `supabase db push` — apply locally
+4. Test end-to-end
+5. Commit the migration file
+```
+
+**If HAS_POSTGRES, create `database-specialist.md`**
+
+```markdown
+---
+name: database-specialist
+description: PostgreSQL expert for [PROJECT_NAME]. Schema, migrations, query optimization.
+tools: Read, Write, Edit, Grep, Glob, Bash
+model: sonnet
+---
+
+You are a PostgreSQL specialist for [PROJECT_NAME].
+
+## Critical Rules
+- Always use parameterized queries
+- Check `pg_stat_user_tables` for bloat before heavy migrations
+- Use `EXPLAIN ANALYZE` on queries touching more than 10k rows
+```
+
+**If HAS_FIREBASE, create `database-specialist.md`**
+
+```markdown
+---
+name: database-specialist
+description: Firebase/Firestore expert for [PROJECT_NAME]. Data modeling, security rules, Authentication.
+tools: Read, Write, Edit, Grep, Glob, Bash
+model: sonnet
+---
+
+You are a Firebase/Firestore specialist for [PROJECT_NAME].
+
+## Critical Rules
+- Always test security rules with Firebase Emulator before deploying
+- Denormalize intentionally — document the reason in a comment
+- Never expose service account keys in client-side code
+```
+
+**If HAS_MONGO, create `database-specialist.md`**
+
+```markdown
+---
+name: database-specialist
+description: MongoDB expert for [PROJECT_NAME]. Schema design, aggregation pipelines, indexing.
+tools: Read, Write, Edit, Grep, Glob, Bash
+model: sonnet
+---
+
+You are a MongoDB specialist for [PROJECT_NAME].
+
+## Critical Rules
+- Always validate with a schema (Mongoose, Zod, or JSON Schema)
+- Add indexes before queries go to production
+- Never store sensitive data in plaintext
+```
+
+**If HAS_PLAYWRIGHT, create `playwright-tester.md`**
+
+```markdown
+---
+name: playwright-tester
+description: E2E testing specialist for [PROJECT_NAME]. Writing tests, debugging failures, browser automation.
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__playwright__*
+model: sonnet
+---
+
+You are a Playwright E2E testing specialist for [PROJECT_NAME].
+
+## Token Optimization (Critical)
+- Prefer `browser_take_screenshot` (~400 tokens) over `browser_snapshot` (~15k tokens)
+- Use `browser_evaluate` to extract specific data instead of full DOM
+
+## Test Authoring
+- Use Page Object Model for flows with more than 3 steps
+- Use `data-testid` attributes — never CSS class or XPath selectors
+- Name files: `feature-name.spec.ts`
+
+## Debugging Failures
+1. Screenshot at failure point
+2. Check for selector vs timing issues
+3. Add `await page.waitForLoadState('networkidle')` for timing issues
+```
+
+**If IS_TEAM, create `code-reviewer.md`**
+
+```markdown
+---
+name: code-reviewer
+description: Reviews code against the plan and coding standards. Tags issues as Critical/Major/Minor with file:line references. Use before merging any PR.
+tools: Read, Grep, Glob
+model: sonnet
+---
+
+You are a code reviewer. Review changes systematically.
+
+## Process
+1. Read the plan, PR description, or ask what the change is supposed to do
+2. Identify all changed files
+3. Review each file against the stated goal
+
+## Severity Tags
+- **Critical**: bugs, security issues, broken functionality — block merge
+- **Major**: performance issues, missing tests, poor design — request changes
+- **Minor**: style, naming, minor improvements — suggestions only
+
+## Output Format
+`[SEVERITY] path/to/file.ts:42 — Description and why it matters`
+
+End with: Critical: N, Major: N, Minor: N, Verdict: APPROVE / REQUEST CHANGES / BLOCK
+
+## Checklist
+- [ ] Logic matches stated goal
+- [ ] Edge cases handled
+- [ ] Tests cover the change
+- [ ] No obvious security issues
+- [ ] No unintended side effects
+```
+
+**If IS_TEAM, create `security-auditor.md`**
+
+```markdown
+---
+name: security-auditor
+description: Audits code for OWASP Top 10, RLS bypass, JWT validation, injection. Use before shipping auth, payment, or data-handling features.
+tools: Read, Grep, Glob
+model: sonnet
+---
+
+You are a security auditor. Check for vulnerabilities methodically.
+
+## OWASP Top 10
+1. Injection — SQL, command, LDAP via unsanitized input
+2. Broken Authentication — weak sessions, missing MFA
+3. Sensitive Data Exposure — secrets in logs, plaintext storage
+4. XML External Entities — if XML parsing involved
+5. Broken Access Control — RLS bypass, missing auth checks, IDOR
+6. Security Misconfiguration — default credentials, verbose errors in production
+7. XSS — unsanitized output, dangerouslySetInnerHTML
+8. Insecure Deserialization
+9. Known Vulnerable Components — check npm audit / pip-audit
+10. Insufficient Logging — missing audit trail for sensitive operations
+
+## Output Format
+`[CRITICAL|HIGH|MEDIUM|LOW] path/to/file.ts:42 — Vulnerability + remediation`
+
+## Always Check
+- Every API route has auth and authorization
+- User input validated and sanitized
+- RLS on every user-facing table
+- No secrets in source code
+- JWT validation includes signature verification (not just decode)
+```
+
+---
+
+### Step E — CLAUDE.md
+
+Generate a complete `CLAUDE.md` in the project root. Use real data from the interview — no placeholders.
+
+Required sections in this order:
+
+1. `# PROJECT_NAME — Claude Configuration`
+2. Byline: `> Auto-generated by project-bootstrap on DATE. Edit this file to keep it current.`
+3. **Repository** — repo URL, main branch, lint command, test command
+4. **Project Overview** — description and full stack list
+5. **Superpowers Workflow** — copy the table below exactly
+6. **Subagents** — table of every agent generated
+7. **Slash Commands** — table of all 5 commands
+8. **Verification Gate** — copy the section below exactly
+9. **Tool Priority (Token Efficiency)** — copy the section below exactly
+10. **Development Workflow** — numbered steps customized for their project
+
+Superpowers Workflow section (copy verbatim, fill in project-specific path examples):
+
+```
+## Superpowers Workflow
+
+New feature → brainstorming → writing-plans → executing-plans → verification-before-completion → requesting-code-review → finishing-a-development-branch
+
+Specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+
+| Need | Skill |
+|------|-------|
+| New feature idea | `/superpowers-extended-cc:brainstorming` |
+| Plan work | `/superpowers-extended-cc:writing-plans` |
+| Execute plan | `/superpowers-extended-cc:executing-plans` |
+| Write tests first | `/superpowers-extended-cc:test-driven-development` |
+| Debug | `/superpowers-extended-cc:systematic-debugging` |
+| Verify before claiming done | `/superpowers-extended-cc:verification-before-completion` |
+| Isolate work | `/superpowers-extended-cc:using-git-worktrees` |
+| Run parallel agents | `/superpowers-extended-cc:dispatching-parallel-agents` |
+| Review | `/superpowers-extended-cc:requesting-code-review` |
+| Ship | `/superpowers-extended-cc:finishing-a-development-branch` |
+```
+
+Verification Gate section (copy verbatim):
+
+```
+## Verification Gate
+
+**Iron Law: NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE**
+
+Before claiming any task is done, fixed, or passing:
+1. IDENTIFY what command proves the claim
+2. RUN it (fresh and complete — not a previous run)
+3. READ the full output and check exit code
+4. VERIFY output actually confirms the claim
+5. ONLY THEN make the claim, and include the output
+
+| Claim | Required evidence |
+|-------|-----------------|
+| Tests pass | Test command output: 0 failures |
+| Linter clean | Linter output: 0 errors |
+| Build succeeds | Build command: exit 0 |
+| Bug fixed | Test reproducing original bug: passes |
+| Feature complete | Each requirement verified line by line |
+| Deployment live | Git hash + CI status confirmed |
+
+Banned phrases without fresh evidence: "should work", "try it now", "looks correct", "should be fixed".
+```
+
+Tool Priority section (copy verbatim):
+
+```
+## Tool Priority (Token Efficiency)
+
+| Task | Preferred | Avoid |
+|------|-----------|-------|
+| Read file | `Read` tool | `Bash cat` |
+| Search content | `Grep` tool | `Bash grep/rg` |
+| Find files | `Glob` tool | `Bash find/ls` |
+| DB schema | Targeted `information_schema` query | `list_tables` (14k tokens) |
+
+When using Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens).
+```
+
+---
+
+### Step F — Summary
+
+Print a clear summary listing every file created and the commit command:
+
+```
+git add CLAUDE.md .mcp.json .claude/
+git commit -m "chore: add Claude Code + Superpowers configuration"
+```
+
+BOOTSTRAP_AGENT_EOF
+success "project-bootstrap agent written"
+
+# ── Step 7: summarize-chat agent ──────────────────────────────────────────────
+header "Step 7 — Writing summarize-chat agent"
+
+cat > "${CLAUDE_DIR}/agents/summarize-chat.md" << 'SUMMARIZE_AGENT_EOF'
+---
+name: summarize-chat
+description: Summarizes the current Claude Code session. Use via /summarize command.
+tools: Read, Glob
+model: haiku
+---
+
+You are a session summarizer. Produce a concise, structured summary of the current conversation.
+
+## Output Format
+
+### Problem Tackled
+What was the user trying to accomplish? 1-3 sentences.
+
+### Approaches Tried
+Bullet list of strategies attempted, including what didn't work and why.
+
+### Current State
+What is working? What is broken or incomplete?
+
+### What's Next
+The single most important next action, then any secondary items.
+
+## Rules
+- Under 300 words
+- Specific: mention actual file names, function names, error messages
+- Past tense for what was done, present tense for current state
+SUMMARIZE_AGENT_EOF
+success "summarize-chat agent written"
+
+# ── Step 8: Done ──────────────────────────────────────────────────────────────
+header "Installation complete"
 echo ""
-echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║                    ✅ Installation Complete!                   ║"
-echo "╚════════════════════════════════════════════════════════════════╝"
+printf "${BOLD}Files created:${RESET}\n"
+printf "  ${GREEN}+${RESET} .claude/settings.json\n"
+printf "  ${GREEN}+${RESET} .claude/hooks/file-guard.js\n"
+printf "  ${GREEN}+${RESET} .claude/commands/commit.md\n"
+printf "  ${GREEN}+${RESET} .claude/commands/run-ci.md\n"
+printf "  ${GREEN}+${RESET} .claude/commands/whats-next.md\n"
+printf "  ${GREEN}+${RESET} .claude/commands/fix-pr.md\n"
+printf "  ${GREEN}+${RESET} .claude/commands/summarize.md\n"
+printf "  ${GREEN}+${RESET} .claude/agents/project-bootstrap.md\n"
+printf "  ${GREEN}+${RESET} .claude/agents/summarize-chat.md\n"
 echo ""
-echo "📁 Created:"
-echo "   .claude/agents/project-bootstrap.md"
-echo "   .claude/bootstrap/README.md"
-echo "   .claude/bootstrap/templates/"
+printf "${BOLD}Superpowers plugin:${RESET} v${SUPERPOWERS_VERSION}\n"
 echo ""
-echo "🚀 Next Steps:"
-echo ""
-echo "   1. Open Claude Code and install the Superpowers plugin (once per machine):"
-echo "      /plugin marketplace add pcvelz/superpowers"
-echo ""
-echo "   2. Open Claude Code in this project directory"
-echo ""
-echo "   3. Run this command:"
-echo "      > Use the project-bootstrap agent to set up this project"
-echo ""
-echo "   4. Choose your mode:"
-echo "      ⚡ Quick Setup (2 min) - Smart defaults, auto-detection"
-echo "      🎯 Detailed Planning (8 min) - Full customization"
-echo ""
-echo "   5. Get your custom CLAUDE.md + subagents!"
-echo ""
-echo "   6. Commit the generated files:"
-echo "      git add CLAUDE.md .claude/"
-echo "      git commit -m \"feat: Add Claude Code configuration\""
-echo ""
-echo "📖 For more info:"
-echo "   cat .claude/bootstrap/README.md"
-echo ""
-echo "💡 Pro tip: The bootstrap agent checks for existing config"
-echo "   and offers to update, add specialists, or start fresh!"
-echo ""
-echo "🎉 Happy coding with Claude!"
+printf "${BOLD}Next steps:${RESET}\n"
+printf "  1. Open Claude Code in this project\n"
+printf "  2. Say: \"Use the project-bootstrap agent to set up this project\"\n"
+printf "  3. Answer 12 questions\n"
+printf "  4. Commit the generated files:\n"
+printf "     ${CYAN}git add CLAUDE.md .mcp.json .claude/ && git commit -m \"chore: add Claude Code configuration\"${RESET}\n"
 echo ""
