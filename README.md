@@ -125,15 +125,10 @@ See `examples/` for complete generated `CLAUDE.md` files:
 ```
 claude-bootstrap-installer.sh   # The only file you need
 README.md
-bootstrap/
-  README.md                     # Reference docs
-  TEMPLATE-CLAUDE.md            # CLAUDE.md template
 examples/
   nextjs-supabase/CLAUDE.md
   python-fastapi/CLAUDE.md
   react-firebase/CLAUDE.md
-archive/
-  claude-bootstrap-v1.sh        # Previous version
 ```
 
 ## Requirements
