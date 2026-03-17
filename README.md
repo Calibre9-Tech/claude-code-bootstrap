@@ -5,7 +5,7 @@ Set up Claude Code for any project in under 60 seconds — powered by the [Super
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/C9-Tech-GtitHub/claude-code-bootstrap/main/claude-bootstrap-installer.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Calibre9-Tech/claude-code-bootstrap/main/claude-bootstrap-installer.sh | bash
 ```
 
 Then open Claude Code and say:
