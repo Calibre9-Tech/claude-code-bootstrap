@@ -87,7 +87,7 @@ else
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
@@ -126,12 +126,16 @@ const blocked = [
   /^\.env$/,
   /^\.env\./,
   /^credentials\.json$/,
+  /^service-account\.json$/,
   /\.pem$/,
   /\.key$/,
   /\.p12$/,
   /\.pfx$/,
   /^id_rsa$/,
   /^id_ed25519$/,
+  /^id_dsa$/,
+  /^id_ecdsa$/,
+  /^\.netrc$/,
   /\.secret$/,
 ];
 
@@ -285,7 +289,7 @@ Create `.mcp.json` in the project root (merge if exists).
 Build mcpServers based on flags:
 - HAS_SUPABASE → `"supabase"`: command `npx`, args `["-y", "@supabase/mcp-server-supabase@latest", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]`
 - HAS_GITHUB → `"github"`: command `npx`, args `["-y", "@modelcontextprotocol/server-github@latest"]`, env `{"GITHUB_TOKEN": "${GITHUB_TOKEN}"}`
-- HAS_DATABASE (no specific MCP matched) → `"filesystem"`: command `npx`, args `["-y", "@modelcontextprotocol/server-filesystem@latest", "."]`
+- HAS_DATABASE and NOT HAS_SUPABASE → `"filesystem"`: command `npx`, args `["-y", "@modelcontextprotocol/server-filesystem@latest", "."]`
 
 Note: HAS_AGENT_BROWSER does NOT add an MCP server. agent-browser is a CLI tool used via Bash commands. If HAS_AGENT_BROWSER, add a note to the generated CLAUDE.md:
 - Install agent-browser: `npm install -g agent-browser`
@@ -298,15 +302,15 @@ If none apply: write `{ "mcpServers": {} }`.
 
 ### Step B — Lint hook
 
-If IS_NODEJS and lint command was provided:
+If lint command was provided (any framework — Node, Python, Go, etc.):
 
 Read `.claude/settings.json`, add PostToolUse hook:
 
 ```json
 "PostToolUse": [
   {
-    "matcher": "Write|Edit",
-    "hooks": [{ "type": "command", "command": "LINT_CMD 2>/dev/null || true", "background": true }]
+    "matcher": "Write|Edit|NotebookEdit",
+    "hooks": [{ "type": "command", "command": "LINT_CMD 2>/dev/null || true" }]
   }
 ]
 ```
@@ -351,6 +355,12 @@ Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
 - /whats-next — session handoff doc
 - /fix-pr — pull and fix PR review comments
 - /summarize — summarize current session
+
+## Note: EnterPlanMode is disabled
+`EnterPlanMode` is blocked in `.claude/settings.json`. Use Superpowers skills instead:
+- Planning → `/superpowers-extended-cc:writing-plans` (saves to `docs/superpowers/plans/`)
+- Execution → `/superpowers-extended-cc:executing-plans`
+These provide the same structure with file-backed plans and review checkpoints.
 ```
 
 **If IS_FRONTEND**, generate `.claude/rules/design-system.md`:
@@ -444,10 +454,11 @@ You are a general-purpose development assistant for [PROJECT_NAME].
 - File operations and project navigation
 
 ## Delegate To
-- Database operations → database-specialist
-- E2E testing → playwright-tester
-- Code review → code-reviewer
-- Security → security-auditor
+[Only include lines for agents that were actually created in this project]
+- Database operations → database-specialist  [include if HAS_DATABASE]
+- E2E browser testing → browser-tester  [include if HAS_AGENT_BROWSER]
+- Code review → code-reviewer  [include if IS_TEAM]
+- Security audit → security-auditor  [include if IS_TEAM]
 ```
 
 **If HAS_SUPABASE, create `database-specialist.md`**

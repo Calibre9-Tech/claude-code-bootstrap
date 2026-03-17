@@ -115,10 +115,21 @@ agent-browser: prefer `--engine lightpanda` (10x faster, 10x less memory). Fall 
 
 ---
 
-{{TECH_SPECIFIC_SECTIONS}}
+## [Framework/Stack] Conventions
+
+<!-- Add project-specific conventions here after bootstrap. Examples:
+- Next.js: App Router structure, Server Components, Route Handlers
+- Supabase: Migration workflow, RLS policies, type generation
+- Firebase: Security rules, Emulator testing, Auth setup
+-->
 
 ---
 
 ## Quick Reference
 
-{{QUICK_REFERENCE_TABLE}}
+| Task | Command |
+|------|---------|
+| Dev server | `{{DEV_COMMAND}}` |
+| Lint | `{{LINT_COMMAND}}` |
+| Tests | `{{TEST_COMMAND}}` |
+| E2E tests | `agent-browser --engine lightpanda open localhost:PORT` |

@@ -52,8 +52,8 @@ After the interview, the bootstrap agent creates:
 | File | Contents |
 |------|---------|
 | `CLAUDE.md` | Project overview, Superpowers workflow, Verification Gate, Token Efficiency, subagents table |
-| `.mcp.json` | MCP servers for Supabase, Playwright, GitHub (based on your stack) |
-| `.claude/settings.json` | PostToolUse lint hook added for Node.js projects |
+| `.mcp.json` | MCP servers for Supabase, GitHub, filesystem fallback (based on your stack) |
+| `.claude/settings.json` | PostToolUse lint hook added for any project with a lint command |
 | `.claude/rules/dev-reference.md` | Superpowers skills + slash commands (auto-loaded every session) |
 | `.claude/rules/design-system.md` | Design token constraints (frontend projects) |
 | `.claude/rules/database.md` | Schema and migration conventions (database projects) |

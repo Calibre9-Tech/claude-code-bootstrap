@@ -1,4 +1,11 @@
 #!/bin/bash
+# =============================================================================
+# DEPRECATED — This is the v1 bootstrap script. Use the current installer:
+#   curl -fsSL https://raw.githubusercontent.com/C9-Tech-GtitHub/claude-code-bootstrap/main/claude-bootstrap-installer.sh | bash
+#
+# This file is kept for reference only. It uses Playwright (replaced by
+# agent-browser + Lightpanda) and does not install the Superpowers plugin.
+# =============================================================================
 # Claude Code Bootstrap - One-File Project Setup
 # Drop this file into any new project and run: bash claude-bootstrap.sh
 

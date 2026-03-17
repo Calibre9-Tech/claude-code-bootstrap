@@ -26,6 +26,9 @@ This project uses the [Superpowers plugin](https://github.com/pcvelz/superpowers
 
 New feature → brainstorming → writing-plans → executing-plans → verification-before-completion → requesting-code-review → finishing-a-development-branch
 
+Specs: `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
+
 | Need | Skill |
 |------|-------|
 | New feature idea | `/superpowers-extended-cc:brainstorming` |
