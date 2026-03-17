@@ -98,9 +98,9 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
 | DB schema | Targeted `information_schema` query | `list_tables` (14k tokens) |
-| Browser state | `agent-browser snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
+| Browser state | `agent-browser --engine lightpanda snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
 
-agent-browser: use `snapshot -i` for element refs, `screenshot` for visual checks — never dump raw DOM.
+agent-browser: prefer `--engine lightpanda` (10x faster, 10x less memory). Fall back to Chrome for screenshots or when Lightpanda limitations apply.
 
 ## Development Workflow
 

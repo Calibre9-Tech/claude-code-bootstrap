@@ -19,7 +19,7 @@ Memora is a consumer app for capturing and organizing photo memories with AI-gen
 - **Database:** Firebase (Firestore + Storage + Auth)
 - **UI Library:** Tailwind CSS + custom components
 - **Deployment:** Firebase Hosting
-- **Testing:** agent-browser E2E (https://agent-browser.dev) + Vitest unit
+- **Testing:** agent-browser E2E + Lightpanda engine (https://agent-browser.dev / https://lightpanda.io) + Vitest unit
 
 ## Superpowers Workflow
 
@@ -95,7 +95,7 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
 
-agent-browser: use `snapshot -i` (~200-400 tokens) for element refs, `screenshot` for visual checks — never dump raw DOM (~3k-5k tokens).
+agent-browser + Lightpanda: use `--engine lightpanda snapshot -i` (~200-400 tokens) for element refs — never dump raw DOM (~3k-5k tokens). Use Chrome (no flag) for screenshots.
 
 ## Development Workflow
 
@@ -132,7 +132,7 @@ agent-browser: use `snapshot -i` (~200-400 tokens) for element refs, `screenshot
 | Dev server | `npm run dev` |
 | Lint | `npm run lint` |
 | Unit tests | `npm test` |
-| E2E tests | `agent-browser open localhost:5173 && agent-browser snapshot -i` |
+| E2E tests | `agent-browser --engine lightpanda open localhost:5173 && agent-browser --engine lightpanda snapshot -i` |
 | Firebase emulator | `firebase emulators:start` |
 | Deploy | `firebase deploy` |
 | Deploy hosting only | `firebase deploy --only hosting` |

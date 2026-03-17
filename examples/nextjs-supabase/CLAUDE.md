@@ -19,7 +19,7 @@ Launchpad is a B2B SaaS platform that helps early-stage startups manage investor
 - **Database:** Supabase (PostgreSQL + Auth + Storage)
 - **UI Library:** shadcn/ui + Tailwind CSS
 - **Deployment:** Vercel
-- **Testing:** agent-browser E2E (https://agent-browser.dev)
+- **Testing:** agent-browser E2E + Lightpanda engine (https://agent-browser.dev / https://lightpanda.io)
 - **AI:** OpenAI GPT-4o (report generation)
 
 ## Superpowers Workflow
@@ -97,7 +97,7 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Find files | `Glob` tool | `Bash find/ls` |
 | DB schema | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X'` | `list_tables` (14k tokens) |
 
-agent-browser: use `snapshot -i` (~200-400 tokens) for element refs, `screenshot` for visual checks — never dump raw DOM (~3k-5k tokens).
+agent-browser + Lightpanda: use `--engine lightpanda snapshot -i` (~200-400 tokens) for element refs — never dump raw DOM (~3k-5k tokens). Use Chrome (no flag) for screenshots.
 
 ## Development Workflow
 
@@ -142,7 +142,7 @@ agent-browser: use `snapshot -i` (~200-400 tokens) for element refs, `screenshot
 | Dev server | `npm run dev` |
 | Lint | `npm run lint` |
 | Unit tests | `npm test` |
-| E2E tests | `agent-browser open localhost:3000 && agent-browser snapshot -i` |
+| E2E tests | `agent-browser --engine lightpanda open localhost:3000 && agent-browser --engine lightpanda snapshot -i` |
 | Add UI component | `npx shadcn@latest add <name>` |
 | Generate DB types | `supabase gen types typescript --local > types/database.ts` |
 | Create migration | `supabase db diff -f <name>` |

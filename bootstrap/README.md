@@ -72,14 +72,27 @@ Required env vars:
 - `SUPABASE_ACCESS_TOKEN` — Supabase Settings > Access Tokens
 - `GITHUB_TOKEN` — GitHub personal access token with `repo` scope
 
-**Note:** agent-browser does not use MCP. It's a CLI tool invoked via Bash:
+**Note:** agent-browser does not use MCP. It's a CLI tool invoked via Bash.
+
+**Preferred setup — agent-browser + Lightpanda:**
 
 ```bash
+# Install agent-browser
 npm install -g agent-browser
-agent-browser install   # downloads Chrome (first time only)
-agent-browser open https://example.com
-agent-browser snapshot -i
+
+# Install Lightpanda (macOS Apple Silicon)
+curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-macos \
+  && chmod a+x ./lightpanda && mv ./lightpanda /usr/local/bin/lightpanda
+
+# Linux x86_64
+curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux \
+  && chmod a+x ./lightpanda && mv ./lightpanda /usr/local/bin/lightpanda
+
+# Set Lightpanda as default engine (agent-browser.json in project root)
+echo '{"engine":"lightpanda"}' > agent-browser.json
 ```
+
+[Lightpanda](https://lightpanda.io) starts instantly, uses 10x less memory than Chrome, and runs 10x faster. Use Chrome (drop `--engine lightpanda`) when you need screenshots, extensions, profiles, or storage state.
 
 ## Re-bootstrap Safety
 

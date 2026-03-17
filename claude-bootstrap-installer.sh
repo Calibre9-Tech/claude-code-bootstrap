@@ -287,7 +287,10 @@ Build mcpServers based on flags:
 - HAS_GITHUB → `"github"`: command `npx`, args `["-y", "@modelcontextprotocol/server-github@latest"]`, env `{"GITHUB_TOKEN": "${GITHUB_TOKEN}"}`
 - HAS_DATABASE (no specific MCP matched) → `"filesystem"`: command `npx`, args `["-y", "@modelcontextprotocol/server-filesystem@latest", "."]`
 
-Note: HAS_AGENT_BROWSER does NOT add an MCP server. agent-browser is a CLI tool used via Bash commands. If HAS_AGENT_BROWSER, add a comment to the generated CLAUDE.md noting that agent-browser must be installed: `npm install -g agent-browser && agent-browser install`
+Note: HAS_AGENT_BROWSER does NOT add an MCP server. agent-browser is a CLI tool used via Bash commands. If HAS_AGENT_BROWSER, add a note to the generated CLAUDE.md:
+- Install agent-browser: `npm install -g agent-browser`
+- Install Lightpanda (preferred engine): `curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-macos && chmod a+x ./lightpanda && mv ./lightpanda /usr/local/bin/lightpanda`
+- Set default engine: add `{ "engine": "lightpanda" }` to `agent-browser.json`
 
 If none apply: write `{ "mcpServers": {} }`.
 
@@ -531,38 +534,74 @@ You are a MongoDB specialist for [PROJECT_NAME].
 ```markdown
 ---
 name: browser-tester
-description: E2E browser testing specialist for [PROJECT_NAME] using agent-browser (https://agent-browser.dev). Automates browsers via CLI commands — no MCP required.
+description: E2E browser testing specialist for [PROJECT_NAME] using agent-browser + Lightpanda (https://agent-browser.dev). Automates browsers via CLI — no MCP required. Prefers Lightpanda for speed; falls back to Chrome.
 tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
 
-You are a browser testing specialist for [PROJECT_NAME], using the agent-browser CLI (https://agent-browser.dev).
+You are a browser testing specialist for [PROJECT_NAME], using agent-browser (https://agent-browser.dev) with Lightpanda as the preferred engine.
 
-## agent-browser Commands
+## Engine: Lightpanda (preferred)
+
+[Lightpanda](https://lightpanda.io) is a headless browser built in Zig — starts instantly, 10x less memory than Chrome, 10x faster. Use it by default for all agent-browser commands.
 
 ```bash
-agent-browser open <url>          # Navigate to URL
-agent-browser snapshot -i         # Accessibility tree with @ref IDs (200-400 tokens)
-agent-browser click @e2           # Click element by ref
-agent-browser type @e3 "text"     # Type into element
-agent-browser screenshot page.png # Screenshot (~400 tokens)
-agent-browser close               # Close browser
+# Preferred — Lightpanda engine
+agent-browser --engine lightpanda open <url>
+agent-browser --engine lightpanda snapshot -i
+agent-browser --engine lightpanda click @e2
+
+# Or set once in agent-browser.json (project root):
+# { "engine": "lightpanda" }
+```
+
+Install Lightpanda (macOS Apple Silicon):
+```bash
+curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-macos && chmod a+x ./lightpanda && mv ./lightpanda /usr/local/bin/lightpanda
+```
+
+Linux (x86_64):
+```bash
+curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-x86_64-linux && chmod a+x ./lightpanda && mv ./lightpanda /usr/local/bin/lightpanda
+```
+
+## Lightpanda Limitations — Fall Back to Chrome
+
+Lightpanda does NOT support: extensions, persistent profiles (`--profile`), storage state (`--state`), file access, headed mode, screenshots (CDP support varies).
+
+When these are needed, drop `--engine lightpanda`:
+```bash
+agent-browser open <url>          # Chrome (default without flag)
+agent-browser screenshot page.png # Use Chrome for screenshots
+```
+
+## Core Commands
+
+```bash
+agent-browser --engine lightpanda open <url>   # Navigate
+agent-browser --engine lightpanda snapshot -i  # Accessibility tree with @ref IDs
+agent-browser --engine lightpanda click @e2    # Click by ref
+agent-browser --engine lightpanda type @e3 "text"  # Type into element
+agent-browser close                            # Close session
+agent-browser screenshot page.png             # Screenshot (Chrome only)
 ```
 
 ## Token Optimization (Critical)
-- Use `agent-browser snapshot -i` (~200-400 tokens) to identify elements — never dump raw DOM
-- Use `agent-browser screenshot` for visual verification — avoids full DOM dumps (~3k-5k tokens)
-- Use ref IDs (`@e1`, `@e2`) for all interactions — deterministic, no re-querying
+- `snapshot -i` outputs ~200-400 tokens — never dump raw DOM (~3k-5k tokens)
+- Use ref IDs (`@e1`, `@e2`) — deterministic, no re-querying
+- For visual checks, fall back to Chrome + `screenshot` (~400 tokens)
 
 ## Test Authoring
-- Write tests as Bash scripts or describe each step as agent-browser CLI commands
+- Write tests as Bash scripts using agent-browser CLI commands
 - Use `data-testid` attributes in source for reliable ref matching
 - Name test scripts: `tests/e2e/feature-name.sh`
+- Default to Lightpanda; add Chrome fallback only for screenshot steps
 
 ## Debugging Failures
-1. `agent-browser screenshot fail.png` — capture state at failure
-2. `agent-browser snapshot -i` — inspect what's on the page
+1. `agent-browser screenshot fail.png` (Chrome) — capture state at failure
+2. `agent-browser --engine lightpanda snapshot -i` — inspect page elements
 3. Re-check the ref ID — snapshots are fresh per page load
+4. If a command errors with Lightpanda, retry without `--engine lightpanda` to isolate
 ```
 
 **If IS_TEAM, create `code-reviewer.md`**
@@ -715,9 +754,9 @@ Tool Priority section (copy verbatim):
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
 | DB schema | Targeted `information_schema` query | `list_tables` (14k tokens) |
-| Browser state | `agent-browser snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
+| Browser state | `agent-browser --engine lightpanda snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
 
-When using agent-browser: use `snapshot -i` for element refs, `screenshot` for visual checks — never dump full DOM.
+agent-browser: prefer `--engine lightpanda` (10x faster, 10x less memory). Use Chrome fallback for screenshots and when Lightpanda limitations apply (no extensions/profiles/storage state).
 ```
 
 ---

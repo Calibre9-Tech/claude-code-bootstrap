@@ -59,7 +59,7 @@ After the interview, the bootstrap agent creates:
 | `.claude/rules/database.md` | Schema and migration conventions (database projects) |
 | `.claude/agents/general-assistant.md` | Always created |
 | `.claude/agents/database-specialist.md` | Supabase, Postgres, Firebase, or MongoDB variant |
-| `.claude/agents/browser-tester.md` | E2E testing agent using [agent-browser](https://agent-browser.dev) CLI |
+| `.claude/agents/browser-tester.md` | E2E testing agent using [agent-browser](https://agent-browser.dev) + [Lightpanda](https://lightpanda.io) (preferred engine) |
 | `.claude/agents/code-reviewer.md` | Critical/Major/Minor tagging (team projects) |
 | `.claude/agents/security-auditor.md` | OWASP Top 10 audit (team/production projects) |
 
@@ -90,7 +90,16 @@ New feature → brainstorming → writing-plans → executing-plans → verifica
 | GitHub repo | `@modelcontextprotocol/server-github@latest` |
 | Other database | `@modelcontextprotocol/server-filesystem@latest` (fallback) |
 
-**Note:** [agent-browser](https://agent-browser.dev) is a CLI tool — no MCP needed. Install: `npm install -g agent-browser && agent-browser install`
+**Note:** [agent-browser](https://agent-browser.dev) is a CLI tool — no MCP needed.
+
+```bash
+npm install -g agent-browser
+# Install Lightpanda (preferred engine — 10x faster, 10x less memory than Chrome)
+curl -L -o lightpanda https://github.com/lightpanda-io/browser/releases/download/nightly/lightpanda-aarch64-macos \
+  && chmod a+x ./lightpanda && mv ./lightpanda /usr/local/bin/lightpanda
+```
+
+Use `--engine lightpanda` for speed; fall back to Chrome for screenshots and features Lightpanda doesn't support (extensions, profiles, storage state).
 
 ## Security: file-guard.js Hook
 
