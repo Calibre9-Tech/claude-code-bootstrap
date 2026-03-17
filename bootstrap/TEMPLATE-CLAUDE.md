@@ -48,13 +48,13 @@ Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
 |-------|-------------|
 | `general-assistant` | Code editing, refactoring, debugging, general tasks |
 | `database-specialist` | Schema changes, migrations, queries, RLS policies |
-| `playwright-tester` | E2E tests, test failures, browser automation |
+| `browser-tester` | E2E tests, test failures, browser automation (agent-browser) |
 | `code-reviewer` | Pre-merge review — tags Critical/Major/Minor |
 | `security-auditor` | OWASP audit before shipping auth or data features |
 
 ```
 Use the database-specialist to add a users table
-Use the playwright-tester to write tests for the login flow
+Use the browser-tester to write tests for the login flow
 Use the code-reviewer to review my PR before I push
 ```
 
@@ -98,8 +98,9 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
 | DB schema | Targeted `information_schema` query | `list_tables` (14k tokens) |
+| Browser state | `agent-browser snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
 
-Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens).
+agent-browser: use `snapshot -i` for element refs, `screenshot` for visual checks — never dump raw DOM.
 
 ## Development Workflow
 

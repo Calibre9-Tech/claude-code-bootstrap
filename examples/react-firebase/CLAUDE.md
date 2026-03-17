@@ -19,7 +19,7 @@ Memora is a consumer app for capturing and organizing photo memories with AI-gen
 - **Database:** Firebase (Firestore + Storage + Auth)
 - **UI Library:** Tailwind CSS + custom components
 - **Deployment:** Firebase Hosting
-- **Testing:** Playwright E2E + Vitest unit
+- **Testing:** agent-browser E2E (https://agent-browser.dev) + Vitest unit
 
 ## Superpowers Workflow
 
@@ -46,13 +46,13 @@ New feature → brainstorming → writing-plans → executing-plans → verifica
 |-------|-------------|
 | `general-assistant` | React components, hooks, state management, styling |
 | `database-specialist` | Firestore data modeling, security rules, Storage rules |
-| `playwright-tester` | E2E tests, regression checks, mobile viewport testing |
+| `browser-tester` | E2E tests, regression checks, mobile viewport testing (agent-browser) |
 | `code-reviewer` | Pre-merge review — tags Critical/Major/Minor |
 | `security-auditor` | Security rules audit before any data-access feature |
 
 ```
 Use the database-specialist to write security rules for the albums collection
-Use the playwright-tester to write a test for the photo upload flow
+Use the browser-tester to write a test for the photo upload flow
 Use the code-reviewer to review my changes before merging
 ```
 
@@ -81,7 +81,7 @@ Before claiming any task is done, fixed, or passing:
 |-------|-----------------|
 | Tests pass | `npm test` output: 0 failures |
 | Linter clean | `npm run lint` output: 0 errors |
-| E2E passing | `npx playwright test` output: all passing |
+| E2E passing | `agent-browser` test script: all steps exit 0 |
 | Security rules correct | Firebase Emulator test suite passing |
 | Deploy live | `firebase hosting:channel:list` shows active deployment |
 
@@ -95,13 +95,13 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
 
-Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens).
+agent-browser: use `snapshot -i` (~200-400 tokens) for element refs, `screenshot` for visual checks — never dump raw DOM (~3k-5k tokens).
 
 ## Development Workflow
 
 1. **Brainstorm** — `/superpowers-extended-cc:brainstorming` for any new feature
 2. **Plan** — `/superpowers-extended-cc:writing-plans` for changes > 30 min
-3. **Implement** — feature branches, Vitest for units, Playwright for flows
+3. **Implement** — feature branches, Vitest for units, agent-browser for flows
 4. **Security rules** — test in Firebase Emulator before deploying
 5. **Verify** — `/run-ci` before pushing
 6. **Review** — `code-reviewer` before merging; `security-auditor` for any rules change
@@ -132,7 +132,7 @@ Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens
 | Dev server | `npm run dev` |
 | Lint | `npm run lint` |
 | Unit tests | `npm test` |
-| E2E tests | `npx playwright test` |
+| E2E tests | `agent-browser open localhost:5173 && agent-browser snapshot -i` |
 | Firebase emulator | `firebase emulators:start` |
 | Deploy | `firebase deploy` |
 | Deploy hosting only | `firebase deploy --only hosting` |

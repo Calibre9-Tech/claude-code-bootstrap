@@ -19,7 +19,7 @@ Launchpad is a B2B SaaS platform that helps early-stage startups manage investor
 - **Database:** Supabase (PostgreSQL + Auth + Storage)
 - **UI Library:** shadcn/ui + Tailwind CSS
 - **Deployment:** Vercel
-- **Testing:** Playwright E2E
+- **Testing:** agent-browser E2E (https://agent-browser.dev)
 - **AI:** OpenAI GPT-4o (report generation)
 
 ## Superpowers Workflow
@@ -47,13 +47,13 @@ New feature → brainstorming → writing-plans → executing-plans → verifica
 |-------|-------------|
 | `general-assistant` | Code editing, refactoring, debugging, Next.js components |
 | `database-specialist` | Supabase schema, migrations, RLS policies, Edge Functions |
-| `playwright-tester` | E2E tests, test failures, visual regression |
+| `browser-tester` | E2E tests, test failures, visual regression (agent-browser) |
 | `code-reviewer` | Pre-merge review — tags Critical/Major/Minor |
 | `security-auditor` | OWASP audit before shipping investor data features |
 
 ```
 Use the database-specialist to add RLS policies to the investors table
-Use the playwright-tester to write a test for the onboarding flow
+Use the browser-tester to write a test for the onboarding flow
 Use the code-reviewer to review my PR before I push
 ```
 
@@ -82,7 +82,7 @@ Before claiming any task is done, fixed, or passing:
 |-------|-----------------|
 | Tests pass | `npm test` output: 0 failures |
 | Linter clean | `npm run lint` output: 0 errors |
-| E2E passing | `npx playwright test` output: all passing |
+| E2E passing | `agent-browser` test script: all steps exit 0 |
 | DB migration applied | `supabase db push` ran, query confirms schema |
 | Deployment live | Vercel URL + CI status green |
 
@@ -97,7 +97,7 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Find files | `Glob` tool | `Bash find/ls` |
 | DB schema | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X'` | `list_tables` (14k tokens) |
 
-Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens).
+agent-browser: use `snapshot -i` (~200-400 tokens) for element refs, `screenshot` for visual checks — never dump raw DOM (~3k-5k tokens).
 
 ## Development Workflow
 
@@ -106,7 +106,7 @@ Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens
 3. **Plan** — `/superpowers-extended-cc:writing-plans` for work > 30 min
 4. **Database** — `supabase db diff -f <name>`, test locally before pushing
 5. **Implement** — `/superpowers-extended-cc:executing-plans`
-6. **Verify** — `/run-ci` (lint + Playwright) before pushing
+6. **Verify** — `/run-ci` (lint + agent-browser E2E) before pushing
 7. **Commit** — `/commit`
 8. **Review** — `code-reviewer` + `security-auditor` for investor-data PRs
 9. **Ship** — Vercel auto-deploys on merge to `main`
@@ -142,7 +142,7 @@ Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens
 | Dev server | `npm run dev` |
 | Lint | `npm run lint` |
 | Unit tests | `npm test` |
-| E2E tests | `npx playwright test` |
+| E2E tests | `agent-browser open localhost:3000 && agent-browser snapshot -i` |
 | Add UI component | `npx shadcn@latest add <name>` |
 | Generate DB types | `supabase gen types typescript --local > types/database.ts` |
 | Create migration | `supabase db diff -f <name>` |

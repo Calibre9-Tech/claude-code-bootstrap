@@ -36,7 +36,7 @@ Generates:
 - `.claude/rules/database.md` (database projects)
 - `.claude/agents/general-assistant.md`
 - `.claude/agents/database-specialist.md` (if database selected)
-- `.claude/agents/playwright-tester.md` (if Playwright selected)
+- `.claude/agents/browser-tester.md` (if agent-browser selected)
 - `.claude/agents/code-reviewer.md` (team/production projects)
 - `.claude/agents/security-auditor.md` (team/production projects)
 
@@ -59,10 +59,6 @@ Generates:
       "command": "npx",
       "args": ["-y", "@supabase/mcp-server-supabase@latest", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]
     },
-    "playwright": {
-      "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
-    },
     "github": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github@latest"],
@@ -75,6 +71,15 @@ Generates:
 Required env vars:
 - `SUPABASE_ACCESS_TOKEN` — Supabase Settings > Access Tokens
 - `GITHUB_TOKEN` — GitHub personal access token with `repo` scope
+
+**Note:** agent-browser does not use MCP. It's a CLI tool invoked via Bash:
+
+```bash
+npm install -g agent-browser
+agent-browser install   # downloads Chrome (first time only)
+agent-browser open https://example.com
+agent-browser snapshot -i
+```
 
 ## Re-bootstrap Safety
 
@@ -108,7 +113,7 @@ project/
     agents/summarize-chat.md
     agents/general-assistant.md
     agents/database-specialist.md
-    agents/playwright-tester.md
+    agents/browser-tester.md
     agents/code-reviewer.md    (team)
     agents/security-auditor.md (team)
 ```

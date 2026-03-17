@@ -59,7 +59,7 @@ After the interview, the bootstrap agent creates:
 | `.claude/rules/database.md` | Schema and migration conventions (database projects) |
 | `.claude/agents/general-assistant.md` | Always created |
 | `.claude/agents/database-specialist.md` | Supabase, Postgres, Firebase, or MongoDB variant |
-| `.claude/agents/playwright-tester.md` | Token-optimized E2E testing agent |
+| `.claude/agents/browser-tester.md` | E2E testing agent using [agent-browser](https://agent-browser.dev) CLI |
 | `.claude/agents/code-reviewer.md` | Critical/Major/Minor tagging (team projects) |
 | `.claude/agents/security-auditor.md` | OWASP Top 10 audit (team/production projects) |
 
@@ -87,9 +87,10 @@ New feature → brainstorming → writing-plans → executing-plans → verifica
 | Stack | MCP Server |
 |-------|-----------|
 | Supabase | `@supabase/mcp-server-supabase@latest` |
-| Playwright testing | `@playwright/mcp@latest` |
 | GitHub repo | `@modelcontextprotocol/server-github@latest` |
 | Other database | `@modelcontextprotocol/server-filesystem@latest` (fallback) |
+
+**Note:** [agent-browser](https://agent-browser.dev) is a CLI tool — no MCP needed. Install: `npm install -g agent-browser && agent-browser install`
 
 ## Security: file-guard.js Hook
 

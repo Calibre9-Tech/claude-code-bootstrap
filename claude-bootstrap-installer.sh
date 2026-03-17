@@ -248,7 +248,7 @@ Ask all questions at once in a numbered list:
 3. Framework / language? (Next.js, React, Vue, Python/FastAPI, Python/Django, Node/Express, Ruby/Rails, Go, other)
 4. Database? (Supabase, PostgreSQL, MySQL, MongoDB, Firebase/Firestore, SQLite, none, other)
 5. UI library? (shadcn/ui, Tailwind CSS, Material UI, Bootstrap, Chakra UI, custom, none)
-6. Testing? (Playwright E2E, Jest/Vitest unit, pytest, Cypress, none)
+6. Testing? (agent-browser E2E, Jest/Vitest unit, pytest, Cypress, none)
 7. Deployment? (Vercel, Netlify, AWS, Heroku, Docker, Railway, other, none)
 8. AI integration? (OpenAI, Anthropic Claude, other, none)
 9. Team size? (solo/prototype, small team, team/production)
@@ -267,7 +267,7 @@ After collecting answers, set these flags internally:
 - HAS_FIREBASE: Firebase/Firestore
 - HAS_MONGO: MongoDB
 - HAS_DATABASE: any database
-- HAS_PLAYWRIGHT: Playwright selected
+- HAS_AGENT_BROWSER: agent-browser E2E selected
 - HAS_GITHUB: GitHub URL provided
 - IS_TEAM: small team or team/production
 - IS_PRODUCTION: team/production
@@ -284,9 +284,10 @@ Create `.mcp.json` in the project root (merge if exists).
 
 Build mcpServers based on flags:
 - HAS_SUPABASE → `"supabase"`: command `npx`, args `["-y", "@supabase/mcp-server-supabase@latest", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]`
-- HAS_PLAYWRIGHT → `"playwright"`: command `npx`, args `["-y", "@playwright/mcp@latest"]`
 - HAS_GITHUB → `"github"`: command `npx`, args `["-y", "@modelcontextprotocol/server-github@latest"]`, env `{"GITHUB_TOKEN": "${GITHUB_TOKEN}"}`
 - HAS_DATABASE (no specific MCP matched) → `"filesystem"`: command `npx`, args `["-y", "@modelcontextprotocol/server-filesystem@latest", "."]`
+
+Note: HAS_AGENT_BROWSER does NOT add an MCP server. agent-browser is a CLI tool used via Bash commands. If HAS_AGENT_BROWSER, add a comment to the generated CLAUDE.md noting that agent-browser must be installed: `npm install -g agent-browser && agent-browser install`
 
 If none apply: write `{ "mcpServers": {} }`.
 
@@ -525,31 +526,43 @@ You are a MongoDB specialist for [PROJECT_NAME].
 - Never store sensitive data in plaintext
 ```
 
-**If HAS_PLAYWRIGHT, create `playwright-tester.md`**
+**If HAS_AGENT_BROWSER, create `browser-tester.md`**
 
 ```markdown
 ---
-name: playwright-tester
-description: E2E testing specialist for [PROJECT_NAME]. Writing tests, debugging failures, browser automation.
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__playwright__*
+name: browser-tester
+description: E2E browser testing specialist for [PROJECT_NAME] using agent-browser (https://agent-browser.dev). Automates browsers via CLI commands — no MCP required.
+tools: Read, Write, Edit, Grep, Glob, Bash
 model: sonnet
 ---
 
-You are a Playwright E2E testing specialist for [PROJECT_NAME].
+You are a browser testing specialist for [PROJECT_NAME], using the agent-browser CLI (https://agent-browser.dev).
+
+## agent-browser Commands
+
+```bash
+agent-browser open <url>          # Navigate to URL
+agent-browser snapshot -i         # Accessibility tree with @ref IDs (200-400 tokens)
+agent-browser click @e2           # Click element by ref
+agent-browser type @e3 "text"     # Type into element
+agent-browser screenshot page.png # Screenshot (~400 tokens)
+agent-browser close               # Close browser
+```
 
 ## Token Optimization (Critical)
-- Prefer `browser_take_screenshot` (~400 tokens) over `browser_snapshot` (~15k tokens)
-- Use `browser_evaluate` to extract specific data instead of full DOM
+- Use `agent-browser snapshot -i` (~200-400 tokens) to identify elements — never dump raw DOM
+- Use `agent-browser screenshot` for visual verification — avoids full DOM dumps (~3k-5k tokens)
+- Use ref IDs (`@e1`, `@e2`) for all interactions — deterministic, no re-querying
 
 ## Test Authoring
-- Use Page Object Model for flows with more than 3 steps
-- Use `data-testid` attributes — never CSS class or XPath selectors
-- Name files: `feature-name.spec.ts`
+- Write tests as Bash scripts or describe each step as agent-browser CLI commands
+- Use `data-testid` attributes in source for reliable ref matching
+- Name test scripts: `tests/e2e/feature-name.sh`
 
 ## Debugging Failures
-1. Screenshot at failure point
-2. Check for selector vs timing issues
-3. Add `await page.waitForLoadState('networkidle')` for timing issues
+1. `agent-browser screenshot fail.png` — capture state at failure
+2. `agent-browser snapshot -i` — inspect what's on the page
+3. Re-check the ref ID — snapshots are fresh per page load
 ```
 
 **If IS_TEAM, create `code-reviewer.md`**
@@ -635,7 +648,7 @@ Required sections in this order:
 3. **Repository** — repo URL, main branch, lint command, test command
 4. **Project Overview** — description and full stack list
 5. **Superpowers Workflow** — copy the table below exactly
-6. **Subagents** — table of every agent generated
+6. **Subagents** — table of every agent generated (use `browser-tester` not `playwright-tester`)
 7. **Slash Commands** — table of all 5 commands
 8. **Verification Gate** — copy the section below exactly
 9. **Tool Priority (Token Efficiency)** — copy the section below exactly
@@ -702,8 +715,9 @@ Tool Priority section (copy verbatim):
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
 | DB schema | Targeted `information_schema` query | `list_tables` (14k tokens) |
+| Browser state | `agent-browser snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
 
-When using Playwright MCP: prefer screenshots (~400 tokens) over DOM snapshots (~15k tokens).
+When using agent-browser: use `snapshot -i` for element refs, `screenshot` for visual checks — never dump full DOM.
 ```
 
 ---
