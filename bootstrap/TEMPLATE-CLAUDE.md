@@ -94,12 +94,13 @@ When using Playwright MCP, prefer screenshots (~400 tokens) over full DOM snapsh
 
 ## Development Workflow
 
-1. **Plan** -- use `/superpowers-extended-cc:writing-plans` for any change > 30 minutes
-2. **Implement** -- use feature branches (`git checkout -b feat/<name>`)
-3. **Verify** -- run `/run-ci` before pushing
-4. **Commit** -- use `/commit` for conventional commits
-5. **Review** -- use `code-reviewer` agent before merging (team projects)
-6. **Ship** -- use `/superpowers-extended-cc:finishing-a-development-branch`
+1. **Brainstorm** -- `/superpowers-extended-cc:brainstorming` before any new feature
+2. **Isolate** -- `/superpowers-extended-cc:using-git-worktrees` to create a clean branch
+3. **Plan** -- `/superpowers-extended-cc:writing-plans` for changes > 30 min
+4. **Implement** -- `/superpowers-extended-cc:executing-plans` with subagent checkpoints
+5. **Test** -- `/superpowers-extended-cc:test-driven-development` (red → green → refactor)
+6. **Review** -- `code-reviewer` agent before merging
+7. **Ship** -- `/superpowers-extended-cc:finishing-a-development-branch`
 
 ---
 
