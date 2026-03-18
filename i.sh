@@ -243,22 +243,63 @@ If it exists:
 
 Never silently overwrite an existing CLAUDE.md.
 
+## Auto-Detection
+
+Before asking anything, scan the project to pre-fill as many answers as possible.
+
+Check these files (read them if they exist):
+- `package.json` → project name, framework, dependencies, scripts (lint, test)
+- `requirements.txt`, `pyproject.toml`, `setup.py` → Python framework, test runner
+- `go.mod` → Go project
+- `Gemfile` → Ruby/Rails
+- `.env`, `.env.example`, `.env.local` → database URLs, API keys (Supabase, OpenAI, etc.)
+- `docker-compose.yml`, `docker-compose.yaml` → database, deployment
+- `vercel.json`, `netlify.toml`, `.railway.json` → deployment platform
+- `Dockerfile` → deployment
+- `supabase/` directory → Supabase
+- `prisma/schema.prisma` → database type
+- `jest.config.js`, `vitest.config.ts` → test runner
+- `playwright.config.ts` → note: use agent-browser instead
+- `pytest.ini`, `pyproject.toml [tool.pytest]` → pytest
+- `.github/` directory → GitHub repo (check remote URL via `git remote get-url origin`)
+- `README.md` → project description
+
+After scanning, show the user what you detected in a clear summary:
+
+```
+I found the following about your project:
+✅ Project name: my-app
+✅ Framework: Next.js (TypeScript)
+✅ Database: Supabase (found SUPABASE_URL in .env)
+✅ UI: shadcn/ui + Tailwind CSS
+✅ Testing: Vitest (found vitest.config.ts)
+✅ Deployment: Vercel (found vercel.json)
+✅ Lint command: npm run lint
+✅ Test command: npm test
+✅ GitHub: https://github.com/org/repo
+❓ What does this project do and who uses it?
+❓ AI integration? (OpenAI, Anthropic Claude, other, none)
+❓ Team size? (solo/prototype, small team, team/production)
+```
+
+Then ask ONLY the questions you couldn't answer. If you detected everything, just confirm with the user before proceeding.
+
 ## Interview
 
-Ask all questions at once in a numbered list:
+Only ask questions that auto-detection could not answer:
 
-1. Project name?
-2. What does it do and who uses it? (1-2 sentences)
-3. Framework / language? (Next.js, React, Vue, Python/FastAPI, Python/Django, Node/Express, Ruby/Rails, Go, other)
-4. Database? (Supabase, PostgreSQL, MySQL, MongoDB, Firebase/Firestore, SQLite, none, other)
-5. UI library? (shadcn/ui, Tailwind CSS, Material UI, Bootstrap, Chakra UI, custom, none)
-6. Testing? (agent-browser E2E, Jest/Vitest unit, pytest, Cypress, none)
-7. Deployment? (Vercel, Netlify, AWS, Heroku, Docker, Railway, other, none)
-8. AI integration? (OpenAI, Anthropic Claude, other, none)
-9. Team size? (solo/prototype, small team, team/production)
-10. GitHub repo URL? (or "none")
-11. Lint command? (e.g. `npm run lint`, `ruff check .` — blank if unsure)
-12. Test command? (e.g. `npm test`, `pytest` — blank if unsure)
+1. Project name? *(skip if detected)*
+2. What does it do and who uses it? (1-2 sentences) *(always ask — can't be detected)*
+3. Framework / language? *(skip if detected)*
+4. Database? *(skip if detected)*
+5. UI library? *(skip if detected)*
+6. Testing? *(skip if detected)*
+7. Deployment? *(skip if detected)*
+8. AI integration? *(skip if detected)*
+9. Team size? (solo/prototype, small team, team/production) *(always ask — can't be detected)*
+10. GitHub repo URL? *(skip if detected from git remote)*
+11. Lint command? *(skip if detected from package.json scripts)*
+12. Test command? *(skip if detected from package.json scripts)*
 
 ## Stack Flags
 
