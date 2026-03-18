@@ -73,7 +73,7 @@ Only ask questions that auto-detection could not answer:
 6. Testing? *(skip if detected)*
 7. Deployment? *(skip if detected)*
 8. AI integration? *(skip if detected)*
-9. Team size? (solo/prototype, small team, team/production) *(always ask — can't be detected)*
+9. Team size? — default to `solo/prototype` unless user specifies otherwise *(skip — default used)*
 10. GitHub repo URL? *(skip if detected from git remote)*
 11. Lint command? *(skip if detected from package.json scripts)*
 12. Test command? *(skip if detected from package.json scripts)*
