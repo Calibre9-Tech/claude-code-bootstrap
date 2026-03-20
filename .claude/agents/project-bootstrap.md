@@ -104,10 +104,19 @@ Run all steps after the interview. Show a progress line for each.
 
 Create `.mcp.json` in the project root (merge if exists).
 
+**MCP Philosophy — CLI first, MCP only when necessary.**
+MCPs load all their tool schemas into context on every session. GitHub MCP costs ~55K tokens before any work begins; Supabase MCP costs ~50K. A single `gh pr list` call via CLI costs ~1.4K tokens and is 100% reliable. Only add MCPs when no CLI alternative exists or for production-grade structured access.
+
 Build mcpServers based on flags:
-- HAS_SUPABASE → `"supabase"`: command `npx`, args `["-y", "@supabase/mcp-server-supabase@latest", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]`
-- HAS_GITHUB → `"github"`: command `npx`, args `["-y", "@modelcontextprotocol/server-github@latest"]`, env `{"GITHUB_TOKEN": "${GITHUB_TOKEN}"}`
-- HAS_DATABASE and NOT HAS_SUPABASE → `"filesystem"`: command `npx`, args `["-y", "@modelcontextprotocol/server-filesystem@latest", "."]`
+- HAS_SUPABASE AND IS_PRODUCTION → `"supabase"`: command `npx`, args `["-y", "@supabase/mcp-server-supabase@latest", "--access-token", "${SUPABASE_ACCESS_TOKEN}"]`
+  Reserve for: RLS policy validation, production access verification.
+  Use `supabase` CLI instead for: migrations (`supabase db diff`, `supabase db push`), schema inspection, local dev.
+- HAS_SUPABASE AND NOT IS_PRODUCTION → Do NOT add Supabase MCP. Use `supabase` CLI via Bash.
+- HAS_GITHUB → Do NOT add GitHub MCP. Use `gh` CLI via Bash (`gh pr create`, `gh issue list`, `gh pr view`). Covers 99% of GitHub workflows at 1/40th the token cost.
+- HAS_DATABASE AND NOT HAS_SUPABASE → Do NOT add filesystem MCP. Use the database CLI directly:
+  - PostgreSQL: `psql $DATABASE_URL -c "SELECT ..."`
+  - MongoDB: `mongosh $MONGODB_URI`
+  - Firebase: `firebase` CLI
 
 Note: HAS_AGENT_BROWSER does NOT add an MCP server. agent-browser is a CLI tool used via Bash commands. If HAS_AGENT_BROWSER, add a note to the generated CLAUDE.md:
 - Install agent-browser: `npm install -g agent-browser`
@@ -179,6 +188,21 @@ Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
 - Planning → `/superpowers-extended-cc:writing-plans` (saves to `docs/superpowers/plans/`)
 - Execution → `/superpowers-extended-cc:executing-plans`
 These provide the same structure with file-backed plans and review checkpoints.
+
+## MCP vs CLI
+
+**Default: CLI. MCPs load tool schemas into context on every session — GitHub MCP alone costs ~55K tokens.**
+
+| Need | Use | Not |
+|------|-----|-----|
+| GitHub (PRs, issues, comments) | `gh` CLI | GitHub MCP |
+| Supabase migrations/schema | `supabase` CLI | Supabase MCP |
+| Supabase RLS (production only) | Supabase MCP | — |
+| PostgreSQL queries | `psql $DATABASE_URL -c "..."` | filesystem MCP |
+| MongoDB queries | `mongosh $MONGODB_URI` | filesystem MCP |
+| Git operations | `git` CLI | any git MCP |
+
+Use MCPs only when: no CLI exists, enterprise OAuth is required, or production audit trails are needed.
 ```
 
 **If IS_FRONTEND**, generate `.claude/rules/design-system.md`:
@@ -279,7 +303,7 @@ You are a general-purpose development assistant for [PROJECT_NAME].
 - Security audit → security-auditor  [include if IS_TEAM]
 ```
 
-**If HAS_SUPABASE, create `database-specialist.md`**
+**If HAS_SUPABASE AND IS_PRODUCTION, create `database-specialist.md`**
 
 ```markdown
 ---
@@ -291,8 +315,44 @@ model: sonnet
 
 You are a Supabase database specialist for [PROJECT_NAME].
 
+## CLI vs MCP
+Prefer `supabase` CLI for most work. Use MCP (mcp__supabase__*) only for RLS validation and production access verification.
+
+| Task | Use |
+|------|-----|
+| Schema inspection | `SELECT * FROM information_schema.columns WHERE table_schema = 'public'` |
+| Create migration | `supabase db diff -f migration_name` |
+| Apply migration | `supabase db push` |
+| RLS policy validation (production) | Supabase MCP |
+| Verify production access | Supabase MCP |
+
 ## Critical Rules
-- Use `information_schema.columns` for schema queries — never `list_tables` (14k tokens)
+- Never use `list_tables` via MCP — costs 14K tokens. Use `information_schema` query above.
+- Always check existing RLS policies before adding a new table
+- Run `supabase db diff` before applying migrations
+
+## Migration Workflow
+1. `supabase db diff -f migration_name`
+2. Review the SQL carefully
+3. `supabase db push` — apply locally
+4. Test end-to-end
+5. Commit the migration file
+```
+
+**If HAS_SUPABASE AND NOT IS_PRODUCTION, create `database-specialist.md`**
+
+```markdown
+---
+name: database-specialist
+description: Supabase expert for [PROJECT_NAME]. Schema changes, migrations, RLS policies, Edge Functions.
+tools: Read, Write, Edit, Grep, Glob, Bash
+model: sonnet
+---
+
+You are a Supabase database specialist for [PROJECT_NAME].
+
+## Critical Rules
+- Use `information_schema.columns` for schema queries — never rely on MCP list_tables (14K tokens)
 - Always check existing RLS policies before adding a new table
 - Run `supabase db diff` before applying migrations
 
@@ -565,8 +625,12 @@ Tool Priority section (copy verbatim):
 | Read file | `Read` tool | `Bash cat` |
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
-| DB schema | Targeted `information_schema` query | `list_tables` (14k tokens) |
-| Browser state | `agent-browser --engine lightpanda snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3k-5k tokens) |
+| GitHub (PRs, issues) | `gh` CLI | GitHub MCP (~55K tokens) |
+| DB schema | Targeted `information_schema` query | `list_tables` (14K tokens) |
+| DB queries | `psql`/`mongosh`/`supabase` CLI | filesystem MCP |
+| Browser state | `agent-browser --engine lightpanda snapshot -i` (~200-400 tokens) | Raw DOM dumps (~3K-5K tokens) |
+
+**MCP rule:** Only add an MCP when no CLI alternative exists. CLI tools are 10-40x cheaper in tokens and 100% reliable. Supabase MCP is acceptable in production for RLS validation; prefer `supabase` CLI for everything else.
 
 agent-browser: prefer `--engine lightpanda` (10x faster, 10x less memory). Use Chrome fallback for screenshots and when Lightpanda limitations apply.
 ```

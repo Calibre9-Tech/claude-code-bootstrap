@@ -98,13 +98,22 @@ New feature → brainstorming → writing-plans → executing-plans → verifica
 | Review | `/superpowers-extended-cc:requesting-code-review` |
 | Ship | `/superpowers-extended-cc:finishing-a-development-branch` |
 
-## MCP Servers Auto-Configured
+## MCP Philosophy — CLI First
 
-| Stack | MCP Server |
-|-------|-----------|
-| Supabase | `@supabase/mcp-server-supabase@latest` |
-| GitHub repo | `@modelcontextprotocol/server-github@latest` |
-| Other database | `@modelcontextprotocol/server-filesystem@latest` (fallback) |
+MCPs load their full tool schema into your context window on every session. The GitHub MCP costs ~55K tokens before you've done any work. A single `gh pr list` via CLI costs ~1.4K and is deterministic.
+
+**Default: use CLI tools. Add MCPs only when no CLI alternative exists.**
+
+| Need | Use | Token cost |
+|------|-----|------------|
+| GitHub (PRs, issues, reviews) | `gh` CLI | ~1.4K |
+| GitHub MCP | ❌ skip | ~55K |
+| Supabase migrations/schema | `supabase` CLI | ~800 |
+| Supabase RLS (production) | Supabase MCP | ~50K |
+| PostgreSQL queries | `psql` CLI | ~200 |
+| MongoDB queries | `mongosh` CLI | ~200 |
+
+The bootstrap generates Supabase MCP only for **production projects**. Solo/prototype projects get CLI guidance instead. GitHub MCP and filesystem MCP are never generated — `gh` CLI and database CLIs cover everything they do at a fraction of the cost.
 
 **Note:** [agent-browser](https://agent-browser.dev) is a CLI tool — no MCP needed.
 
