@@ -98,9 +98,13 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Read file | `Read` tool | `Bash cat` |
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
-| DB schema | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X'` | `list_tables` (14k tokens) |
+| GitHub (PRs, issues) | `gh` CLI | GitHub MCP (~55K tokens) |
+| DB schema | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X'` | `list_tables` (14K tokens) |
+| DB queries | `supabase` CLI | filesystem MCP |
 
-agent-browser + Lightpanda: use `--engine lightpanda snapshot -i` (~200-400 tokens) for element refs — never dump raw DOM (~3k-5k tokens). Use Chrome (no flag) for screenshots.
+**MCP rule:** Use `gh` CLI for all GitHub work. Supabase MCP is available for RLS validation and production access — prefer `supabase` CLI for everything else.
+
+agent-browser + Lightpanda: use `--engine lightpanda snapshot -i` (~200-400 tokens) for element refs — never dump raw DOM (~3K-5K tokens). Use Chrome (no flag) for screenshots.
 
 ## Development Workflow
 

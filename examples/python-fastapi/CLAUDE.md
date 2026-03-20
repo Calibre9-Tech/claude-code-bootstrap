@@ -93,7 +93,11 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Read file | `Read` tool | `Bash cat` |
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
-| DB schema | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X'` | `list_tables` (14k tokens) |
+| GitHub (PRs, issues) | `gh` CLI | GitHub MCP (~55K tokens) |
+| DB schema | `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X'` | `list_tables` (14K tokens) |
+| DB queries | `psql $DATABASE_URL -c "..."` | filesystem MCP |
+
+**MCP rule:** Use CLI tools over MCPs. CLIs are 10-40x cheaper in tokens and 100% reliable.
 
 ## Development Workflow
 

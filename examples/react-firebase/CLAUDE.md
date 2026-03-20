@@ -97,8 +97,12 @@ Banned phrases without fresh evidence: "should work", "try it now", "looks corre
 | Read file | `Read` tool | `Bash cat` |
 | Search content | `Grep` tool | `Bash grep/rg` |
 | Find files | `Glob` tool | `Bash find/ls` |
+| GitHub (PRs, issues) | `gh` CLI | GitHub MCP (~55K tokens) |
+| Firebase queries | `firebase` CLI | filesystem MCP |
 
-agent-browser + Lightpanda: use `--engine lightpanda snapshot -i` (~200-400 tokens) for element refs — never dump raw DOM (~3k-5k tokens). Use Chrome (no flag) for screenshots.
+**MCP rule:** Use CLI tools over MCPs. CLIs are 10-40x cheaper in tokens and 100% reliable.
+
+agent-browser + Lightpanda: use `--engine lightpanda snapshot -i` (~200-400 tokens) for element refs — never dump raw DOM (~3K-5K tokens). Use Chrome (no flag) for screenshots.
 
 ## Development Workflow
 
