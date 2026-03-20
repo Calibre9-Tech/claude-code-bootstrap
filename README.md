@@ -16,16 +16,32 @@ Use the project-bootstrap agent to set up this project
 
 Answer 12 questions. Get a complete, structured Claude Code configuration.
 
-## Re-bootstrap Safety
+## Upgrading an Existing Setup
 
-Safe to re-run at any time. The bootstrap agent detects an existing `CLAUDE.md` and offers:
+Already have Claude Code configured? Run the same command:
 
-1. **Update** — add missing sections without touching existing content
-2. **Add Superpowers** — only insert the Superpowers workflow table
-3. **Regenerate** — full re-interview and replace all generated files
-4. **Cancel** — exit without any changes
+```
+Use the project-bootstrap agent to set up this project
+```
+
+The agent detects your existing `CLAUDE.md` and offers four options:
+
+1. **Update** — adds any missing sections (agents, rules files, MCP config) without touching what you already have
+2. **Add Superpowers** — only inserts the Superpowers workflow table into your existing `CLAUDE.md`
+3. **Regenerate** — full re-interview and replaces all generated files
+4. **Cancel** — exits without any changes
 
 Your existing setup is never silently overwritten.
+
+### Common upgrade scenarios
+
+**Manually written `CLAUDE.md` you want to keep** — choose **Update**. The agent appends the Superpowers skill table, subagents table, and Verification Gate without touching your existing content.
+
+**Stack changed** (e.g. added a database or moved to a new framework) — choose **Regenerate**. The agent re-interviews you and produces a fresh config reflecting the new stack, including the right MCP servers and specialized agents.
+
+**Missing an agent** (e.g. never got `browser-tester.md` or `security-auditor.md`) — choose **Update**. The agent creates any missing files and skips ones that already exist.
+
+**Just want Superpowers added** — choose **Add Superpowers**. This is the minimal path: only the skills workflow table is inserted.
 
 ## What the Installer Creates
 
