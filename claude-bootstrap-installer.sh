@@ -40,6 +40,14 @@ fi
 if ! command -v node &>/dev/null; then
   warn "node not found — required for file-guard.js hook (https://nodejs.org)"
 fi
+if command -v codex &>/dev/null; then
+  success "Codex CLI detected — cross-model review will be available during setup"
+else
+  info "Codex CLI not found — cross-model review option will be skipped (install: npm i -g @openai/codex)"
+fi
+if command -v gemini &>/dev/null; then
+  success "Gemini CLI detected — full review mode (Codex + Gemini) will be available"
+fi
 
 # ── Step 1: Superpowers plugin ────────────────────────────────────────────────
 header "Step 1 — Installing Superpowers plugin v${SUPERPOWERS_VERSION}"
@@ -263,6 +271,8 @@ Check these files (read them if they exist):
 - `pytest.ini`, `pyproject.toml [tool.pytest]` → pytest
 - `.github/` directory → GitHub repo (check remote URL via `git remote get-url origin`)
 - `README.md` → project description
+- `codex --version` (via Bash) → Codex CLI installed (enables cross-model review option)
+- `gemini --version` (via Bash) → Gemini CLI installed (enables full review mode)
 
 After scanning, show the user what you detected in a clear summary:
 
@@ -279,6 +289,7 @@ I found the following about your project:
 ✅ GitHub: https://github.com/org/repo
 ❓ What does this project do and who uses it?
 ❓ AI integration? (OpenAI, Anthropic Claude, other, none)
+❓ Cross-model review? (Codex reviews your plans and code — codex CLI detected)
 ❓ Team size? (solo/prototype, small team, team/production)
 ```
 
@@ -300,6 +311,7 @@ Only ask questions that auto-detection could not answer:
 10. GitHub repo URL? *(skip if detected from git remote)*
 11. Lint command? *(skip if detected from package.json scripts)*
 12. Test command? *(skip if detected from package.json scripts)*
+13. Cross-model review? *(skip if codex CLI not installed)* — Codex (and optionally Gemini) review your plans and implementation. Options: yes (Codex only), yes (Codex + Gemini), no. Default: no. Authentication uses OAuth only — no API keys are stored or generated.
 
 ## Stack Flags
 
@@ -316,6 +328,8 @@ After collecting answers, set these flags internally:
 - HAS_GITHUB: GitHub URL provided
 - IS_TEAM: small team or team/production
 - IS_PRODUCTION: team/production
+- HAS_CROSS_MODEL_REVIEW: user opted in and codex CLI is installed
+- HAS_GEMINI_REVIEW: user opted in to Gemini as second reviewer
 
 ## Generation Steps
 
@@ -396,6 +410,8 @@ Plans: `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
 - /whats-next — session handoff doc
 - /fix-pr — pull and fix PR review comments
 - /summarize — summarize current session
+[If HAS_CROSS_MODEL_REVIEW, also include:]
+- /build — plan → Codex review → implement → verify → Codex review (cross-model workflow)
 
 ## Note: EnterPlanMode is disabled
 `EnterPlanMode` is blocked in `.claude/settings.json`. Use Superpowers skills instead:
@@ -500,6 +516,7 @@ You are a general-purpose development assistant for [PROJECT_NAME].
 - E2E browser testing → browser-tester  [include if HAS_AGENT_BROWSER]
 - Code review → code-reviewer  [include if IS_TEAM]
 - Security audit → security-auditor  [include if IS_TEAM]
+- Cross-model build workflow → use /build command  [include if HAS_CROSS_MODEL_REVIEW]
 ```
 
 **If HAS_SUPABASE, create `database-specialist.md`**
@@ -728,6 +745,254 @@ You are a security auditor. Check for vulnerabilities methodically.
 
 ---
 
+### Step D.5 — Cross-Model Review (if HAS_CROSS_MODEL_REVIEW)
+
+Create the `/build` workflow files. **Security: no API keys are written. Authentication relies on OAuth only.**
+
+**Create `scripts/review.sh`** (make executable with `chmod +x`):
+
+```bash
+#!/usr/bin/env bash
+# review.sh — Cross-model review abstraction
+# Calls Codex/Gemini headless, parses fenced JSON verdicts, returns exit codes.
+# Authentication: OAuth only (codex auth / gemini login). No API keys.
+set -euo pipefail
+
+CODEX_MODEL="\${CODEX_MODEL:-o4-mini}"
+GEMINI_MODEL="\${GEMINI_MODEL:-gemini-2.5-flash}"
+REVIEW_EFFORT="\${REVIEW_EFFORT:-high}"
+REVIEW_TIMEOUT="\${REVIEW_TIMEOUT:-600}"
+REVIEWER="\${1:-codex}"
+REVIEW_TYPE="\${2:-plan}"
+REVIEW_FILE="\${3:-}"
+BRANCH="\${4:-\$(git branch --show-current)}"
+
+REVIEWS_DIR="reviews/\${BRANCH}"
+mkdir -p "\${REVIEWS_DIR}"
+
+# ── Auth check ───────────────────────────────────────────────────────────────
+check_auth() {
+  local tool="\$1"
+  if [[ "\$tool" == "codex" ]]; then
+    if ! codex exec --ephemeral --sandbox read-only "echo ok" &>/dev/null; then
+      echo "ERROR: Codex not authenticated. Run: codex auth" >&2
+      exit 1
+    fi
+  elif [[ "\$tool" == "gemini" ]]; then
+    if ! command -v gemini &>/dev/null; then
+      echo "ERROR: Gemini CLI not installed. Run: npm i -g @google/gemini-cli" >&2
+      exit 1
+    fi
+  fi
+}
+
+# ── Build diff/context ──────────────────────────────────────────────────────
+get_review_context() {
+  local base_ref
+  base_ref=\$(git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null || echo "HEAD~1")
+
+  if [[ -n "\$REVIEW_FILE" && -f "\$REVIEW_FILE" ]]; then
+    cat "\$REVIEW_FILE"
+  else
+    echo "## Git Diff"
+    git diff "\${base_ref}...HEAD" 2>/dev/null || git diff HEAD~1
+  fi
+}
+
+# ── Review prompt ────────────────────────────────────────────────────────────
+build_prompt() {
+  local review_type="\$1"
+  local context
+  context="\$(get_review_context)"
+
+  cat <<PROMPT
+You are a code reviewer. Review the following \${review_type}.
+
+\${context}
+
+Respond with your review, then end with a fenced JSON verdict block:
+
+\\\`\\\`\\\`json
+{
+  "verdict": "APPROVE" or "REQUEST_CHANGES",
+  "blocking": ["list of blocking issues"] or [],
+  "suggestions": ["list of non-blocking suggestions"] or []
+}
+\\\`\\\`\\\`
+
+Be thorough but concise. Focus on correctness, security, and maintainability.
+PROMPT
+}
+
+# ── Run single reviewer ─────────────────────────────────────────────────────
+run_codex_review() {
+  local prompt="\$1"
+  local output_file="\$2"
+
+  check_auth codex
+  timeout "\${REVIEW_TIMEOUT}" codex exec \\
+    --ephemeral \\
+    --sandbox read-only \\
+    --model "\${CODEX_MODEL}" \\
+    --reasoning-effort "\${REVIEW_EFFORT}" \\
+    "\${prompt}" > "\${output_file}" 2>&1 || {
+      echo "Codex review timed out or failed" >> "\${output_file}"
+      return 1
+    }
+}
+
+run_gemini_review() {
+  local prompt="\$1"
+  local output_file="\$2"
+
+  check_auth gemini
+  timeout "\${REVIEW_TIMEOUT}" gemini -p "\${prompt}" \\
+    --model "\${GEMINI_MODEL}" > "\${output_file}" 2>&1 || {
+      echo "Gemini review timed out or failed" >> "\${output_file}"
+      return 1
+    }
+}
+
+# ── Parse verdict ────────────────────────────────────────────────────────────
+parse_verdict() {
+  local review_file="\$1"
+  local verdict_file="\${review_file}.verdict.json"
+
+  local json_block
+  json_block=\$(sed -n '/^\`\`\`json/,/^\`\`\`/p' "\$review_file" | sed '1d;\$d')
+
+  if [[ -z "\$json_block" ]]; then
+    echo '{"verdict":"UNKNOWN","blocking":["reviewer did not produce a parseable verdict"],"suggestions":[]}' > "\$verdict_file"
+    return 1
+  fi
+
+  echo "\$json_block" > "\$verdict_file"
+
+  local verdict
+  verdict=\$(echo "\$json_block" | jq -r '.verdict // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
+
+  if [[ "\$verdict" == "APPROVE" ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+round="\${5:-1}"
+output_file="\${REVIEWS_DIR}/\${REVIEW_TYPE}-review-round-\${round}.md"
+prompt="\$(build_prompt "\${REVIEW_TYPE}")"
+
+case "\$REVIEWER" in
+  codex)
+    run_codex_review "\$prompt" "\$output_file"
+    ;;
+  gemini)
+    run_gemini_review "\$prompt" "\$output_file"
+    ;;
+  codex,gemini|both)
+    codex_file="\${output_file%.md}-codex.md"
+    gemini_file="\${output_file%.md}-gemini.md"
+    run_codex_review "\$prompt" "\$codex_file" &
+    codex_pid=\$!
+    run_gemini_review "\$prompt" "\$gemini_file" &
+    gemini_pid=\$!
+    wait "\$codex_pid" || true
+    wait "\$gemini_pid" || true
+    echo "# Codex Review" > "\$output_file"
+    cat "\$codex_file" >> "\$output_file"
+    echo -e "\\n# Gemini Review" >> "\$output_file"
+    cat "\$gemini_file" >> "\$output_file"
+    ;;
+  *)
+    echo "Unknown reviewer: \$REVIEWER" >&2
+    exit 1
+    ;;
+esac
+
+parse_verdict "\$output_file"
+exit_code=\$?
+
+echo "Review saved: \${output_file}"
+echo "Verdict: \$(jq -r '.verdict' "\${output_file}.verdict.json" 2>/dev/null || echo 'UNKNOWN')"
+
+exit \$exit_code
+```
+
+**Create `.claude/commands/build.md`**:
+
+```markdown
+Run the cross-model build workflow: PLAN → REVIEW → IMPLEMENT → VERIFY → REVIEW → DONE
+
+## Arguments
+- `\$ARGUMENTS` — the task description
+- `--mode` — workflow mode (default: plan_review)
+  - `plan_review` — Claude plans → Codex reviews → Claude implements → Codex reviews
+  - `full_review` — same but Codex + Gemini review in parallel
+  - `just_plan` — Claude plans, no external review
+- `--reviewer` — override reviewer (codex, gemini, codex,gemini)
+
+## State Machine
+
+States: PLAN → PLAN_REVIEW → IMPLEMENT → VERIFY → IMPL_REVIEW → DONE/NEEDS_HUMAN_REVIEW
+
+Loop limits: 2 plan review rounds, 2 impl review rounds, 2 fix cycles max.
+
+## Steps
+
+### 1. Parse mode
+Detect mode from flags or natural language:
+- "plan this out" → plan_review (default)
+- "full review" / "with gemini" → full_review
+- "just plan" / "skip review" → just_plan
+
+### 2. PLAN
+Write a detailed implementation plan to `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+Include: goal, approach, files to change, risks, test strategy.
+
+### 3. PLAN_REVIEW (skip if just_plan)
+Create a checkpoint commit: `chore: review checkpoint (auto)`
+Run: `bash scripts/review.sh REVIEWER plan docs/superpowers/plans/YYYY-MM-DD-<topic>.md BRANCH ROUND`
+- REVIEWER = codex (plan_review) or codex,gemini (full_review)
+- If APPROVE → proceed to IMPLEMENT
+- If REQUEST_CHANGES → read blocking issues, revise plan, re-review (max 2 rounds)
+- If 2 rounds exhausted → proceed with warnings noted
+
+### 4. IMPLEMENT
+Execute the plan. Write code, tests, documentation as specified.
+Create checkpoint commit after implementation.
+
+### 5. VERIFY
+Run lint and test commands. Fix failures (max 3 retries).
+If still failing after 3 retries → BLOCKED state. Preserve state for resume.
+
+### 6. IMPL_REVIEW (skip if just_plan)
+Create checkpoint commit.
+Run: `bash scripts/review.sh REVIEWER implementation "" BRANCH ROUND`
+- If APPROVE → DONE
+- If REQUEST_CHANGES → read blocking issues, fix, re-verify, re-review (max 2 rounds)
+- If fix_cycle > 2 → NEEDS_HUMAN_REVIEW
+
+### 7. Terminal States
+- **DONE** — all reviews passed. Suggest: squash checkpoint commits, create PR.
+- **NEEDS_HUMAN_REVIEW** — unresolved blocking findings. Review artifacts preserved in `reviews/`.
+- **BLOCKED** — tests/lint won't pass. State preserved for resume.
+
+## Important
+- Never store or reference API keys — reviewers authenticate via OAuth
+- Checkpoint commits should be squashed before merging
+- Review artifacts are committed to `reviews/<branch>/`
+```
+
+**Create directories and gitignore entries:**
+```bash
+mkdir -p reviews
+touch reviews/.gitkeep
+grep -q '.claude/local/' .gitignore 2>/dev/null || echo '.claude/local/' >> .gitignore
+```
+
+---
+
 ### Step E — CLAUDE.md
 
 Generate a complete `CLAUDE.md` in the project root. Use real data from the interview — no placeholders.
@@ -744,6 +1009,7 @@ Required sections in this order:
 8. **Verification Gate** — copy the section below exactly
 9. **Tool Priority (Token Efficiency)** — copy the section below exactly
 10. **Development Workflow** — numbered steps customized for their project
+11. **Cross-Model Review** *(only if HAS_CROSS_MODEL_REVIEW)* — copy the section below
 
 Superpowers Workflow section (copy verbatim, fill in project-specific path examples):
 
@@ -811,14 +1077,48 @@ Tool Priority section (copy verbatim):
 agent-browser: prefer `--engine lightpanda` (10x faster, 10x less memory). Use Chrome fallback for screenshots and when Lightpanda limitations apply (no extensions/profiles/storage state).
 ```
 
+Cross-Model Review section (include only if HAS_CROSS_MODEL_REVIEW — copy verbatim):
+
+```
+## Cross-Model Review
+
+Claude plans and implements. Codex (and optionally Gemini) reviews. The `/build` command orchestrates the workflow.
+
+### Usage
+- `/build "add user authentication"` — default: Codex reviews plan and implementation
+- `/build --mode full_review "add auth"` — Codex + Gemini review in parallel
+- `/build --mode just_plan "add auth"` — plan only, no external review
+
+### State Machine
+PLAN → PLAN_REVIEW (max 2 rounds) → IMPLEMENT → VERIFY → IMPL_REVIEW (max 2 rounds) → DONE
+
+### Terminal States
+| State | Meaning |
+|-------|---------|
+| DONE | All reviews passed — squash checkpoint commits and create PR |
+| NEEDS_HUMAN_REVIEW | Unresolved blocking findings after exhausting review budget |
+| BLOCKED | Tests/lint won't pass after 3 retries |
+
+### Authentication
+Reviewers authenticate via OAuth — no API keys are stored or managed by this workflow.
+- Codex: `codex auth` (one-time browser login)
+- Gemini: `gemini` (one-time Google login)
+
+### Review Artifacts
+- `reviews/<branch>/plan-review-round-1.md` — full reviewer output
+- `reviews/<branch>/plan-review-round-1.md.verdict.json` — structured verdict
+```
+
 ---
 
 ### Step F — Summary
 
-Print a clear summary listing every file created and the commit command:
+Print a clear summary listing every file created. If HAS_CROSS_MODEL_REVIEW, also list `scripts/review.sh`, `.claude/commands/build.md`, and `reviews/.gitkeep`.
+
+Commit command:
 
 ```
-git add CLAUDE.md .mcp.json .claude/
+git add CLAUDE.md .mcp.json .claude/ scripts/ reviews/
 git commit -m "chore: add Claude Code + Superpowers configuration"
 ```
 

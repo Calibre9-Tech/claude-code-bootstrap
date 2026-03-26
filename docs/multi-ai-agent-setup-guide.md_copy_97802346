@@ -1,0 +1,302 @@
+# Multi-AI Agent System — Setup Guide
+**Last updated:** 2026-03-26
+**Source repo:** https://github.com/Calibre9-Tech/claude-overnight
+
+This guide explains how to add the cross-model review workflow to any Claude Code environment. Claude plans and implements. Codex (and optionally Gemini) review. A deterministic state machine enforces the workflow.
+
+---
+
+## What you get
+
+A `/build` command that runs: **PLAN → REVIEW → IMPLEMENT → VERIFY → REVIEW → DONE**
+
+| Mode | What happens |
+|------|-------------|
+| `plan_review` (default) | Claude plans → Codex reviews the plan → Claude implements → Codex reviews implementation |
+| `full_review` | Same but Codex + Gemini review in parallel |
+| `research_review` | Research agents gather current-month info → then plan_review flow |
+| `just_plan` | Claude plans, no external review |
+
+Loop limits prevent runaway: 2 plan review rounds, 2 impl review rounds, 2 fix cycles max.
+
+---
+
+## Prerequisites
+
+- Node.js 20+ (`node --version`)
+- `jq` installed (`sudo apt-get install -y jq`)
+- Claude Code installed and authenticated
+
+---
+
+## Step 1: Install Codex CLI
+
+```bash
+# Set up local npm prefix (avoids sudo)
+mkdir -p ~/.npm-global
+npm config set prefix '~/.npm-global'
+echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# Install
+npm i -g @openai/codex
+codex --version  # should show 0.116.0+
+```
+
+### Authenticate Codex
+
+**Option A — OAuth (interactive, recommended for first setup):**
+```bash
+codex auth
+# Follow the URL + code flow in your browser
+```
+
+**Option B — API key (headless/CI):**
+```bash
+echo 'export CODEX_API_KEY=sk-...' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Verify
+```bash
+codex exec --ephemeral --sandbox read-only "echo hello"
+```
+
+---
+
+## Step 2: Install Gemini CLI (optional — only needed for `full_review` mode)
+
+```bash
+npm i -g @google/gemini-cli
+mkdir -p ~/.gemini
+echo '{"projects":{}}' > ~/.gemini/projects.json
+```
+
+### Authenticate Gemini
+
+**Option A — API key (recommended for headless):**
+```bash
+# Get key from https://aistudio.google.com/apikey
+echo 'export GEMINI_API_KEY=AIza...' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Option B — OAuth (interactive):**
+```bash
+gemini  # follow Google login prompts
+```
+
+### Verify
+```bash
+gemini -p "Say hello"
+```
+
+---
+
+## Step 3: Copy the files
+
+From the `claude-overnight` repo, copy these files into your project:
+
+```bash
+# Required
+cp scripts/review.sh        <your-project>/scripts/review.sh
+cp .claude/commands/build.md <your-project>/.claude/commands/build.md
+
+# Make executable
+chmod +x <your-project>/scripts/review.sh
+
+# Create directories
+mkdir -p <your-project>/reviews
+mkdir -p <your-project>/.claude/local
+touch <your-project>/reviews/.gitkeep
+
+# Gitignore ephemeral state
+echo '.claude/local/' >> <your-project>/.gitignore
+```
+
+### What each file does
+
+| File | Purpose |
+|------|---------|
+| `scripts/review.sh` | Calls Codex/Gemini headless, parses fenced JSON verdicts, returns exit codes. Supports single + parallel multi-reviewer. |
+| `.claude/commands/build.md` | The `/build` command — deterministic state machine that orchestrates plan → review → implement → review. |
+| `reviews/` | Durable review artifacts (committed to git). |
+| `.claude/local/` | Ephemeral per-branch state files (gitignored). |
+
+---
+
+## Step 4: Add the rules (optional but recommended)
+
+Add this to your project's `.claude/rules/` or `CLAUDE.md`:
+
+```markdown
+## Cross-Model Review (Default Behavior)
+
+All planning uses Codex review by default. The `/build` command has four explicit modes:
+
+| Mode | Flag | NL triggers | What happens |
+|------|------|-------------|--------------|
+| `just_plan` | `--mode just_plan` | "just plan", "skip review" | Claude plans, no external review |
+| `plan_review` | `--mode plan_review` | "plan this out" (DEFAULT) | Claude plans → Codex reviews |
+| `full_review` | `--mode full_review` | "full review", "with gemini" | Claude plans → Codex + Gemini review in parallel |
+| `research_review` | `--mode research_review` | "current research", "latest info" | Research agents → Claude plans → Codex reviews |
+
+Gemini is opt-in only — never used unless explicitly requested.
+Ambiguity defaults to plan_review. Overnight sessions MUST use explicit --mode flags.
+```
+
+---
+
+## Step 5: Test
+
+```bash
+# Create a test branch
+git checkout -b test/build-workflow
+
+# Run /build with a simple task
+# In Claude Code, type:
+/build Add a hello world script
+
+# This should:
+# 1. Write a plan
+# 2. Send it to Codex for review
+# 3. Implement based on the plan
+# 4. Run verification (if tests/lint exist)
+# 5. Send implementation to Codex for review
+# 6. End in DONE or NEEDS_HUMAN_REVIEW
+
+# Clean up
+git checkout main
+git branch -D test/build-workflow
+```
+
+---
+
+## Usage
+
+```bash
+# Default — Codex reviews plan and implementation
+/build "add user authentication"
+
+# Explicit mode
+/build --mode plan_review "add user authentication"
+
+# Full review — Codex + Gemini in parallel
+/build --mode full_review "add user authentication"
+
+# Research first — gather current-month info before planning
+/build --mode research_review "evaluate auth libraries"
+
+# Just plan, no review
+/build --mode just_plan "add user authentication"
+
+# Override reviewer
+/build --reviewer gemini "add user authentication"
+/build --reviewer codex,gemini "add user authentication"
+```
+
+Natural language also works:
+- "plan this out" → `plan_review`
+- "full review" or "with gemini" → `full_review`
+- "current research" or "latest info" → `research_review`
+- "just plan" → `just_plan`
+
+---
+
+## Configuration
+
+Environment variables in `scripts/review.sh`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CODEX_MODEL` | `gpt-5.4` | Codex model for reviews |
+| `GEMINI_MODEL` | `gemini-3-flash-preview` | Gemini model for reviews |
+| `REVIEW_EFFORT` | `high` | Codex reasoning effort |
+| `REVIEW_TIMEOUT` | `600` | Timeout per review in seconds |
+
+Override per-session:
+```bash
+CODEX_MODEL=gpt-5.4-mini /build "quick task"
+```
+
+---
+
+## How it works
+
+### State machine
+
+```
+PLAN → PLAN_REVIEW (max 2 rounds) → IMPLEMENT → VERIFY → IMPL_REVIEW (max 2 rounds)
+                                                              ↓
+                                                     fix_cycle < 2?
+                                                     yes → back to IMPLEMENT
+                                                     no → NEEDS_HUMAN_REVIEW
+```
+
+### Terminal states
+
+| State | Meaning |
+|-------|---------|
+| `DONE` | All reviews passed. Suggest squashing checkpoint commits and creating a PR. |
+| `NEEDS_HUMAN_REVIEW` | Unresolved blocking findings after exhausting review budget. Artifacts preserved. |
+| `BLOCKED` | Tests/lint/build won't pass after 3 retries. State preserved for resume. |
+
+### Review artifacts
+
+Each review round produces:
+- `reviews/<branch>/plan-review-round-1.md` — full reviewer output
+- `reviews/<branch>/plan-review-round-1.md.verdict.json` — structured verdict for programmatic access
+
+### Checkpoint commits
+
+Before each external review, Claude creates a checkpoint commit (`chore: review checkpoint (auto)`) to ensure the diff includes all changes. These should be squashed before merging.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `codex: command not found` | `source ~/.bashrc` or add `~/.npm-global/bin` to PATH |
+| `Codex not authenticated` | Run `codex auth` or set `CODEX_API_KEY` |
+| `Gemini not authenticated` | Run `gemini` or set `GEMINI_API_KEY` |
+| `exhausted your capacity` | Gemini free tier rate limit. Wait a few seconds or use an API key. |
+| Review times out | Increase `REVIEW_TIMEOUT` env var. Default is 600s. |
+| `reviewer did not produce a parseable verdict` | Model didn't output fenced JSON. Try again — intermittent. |
+| `No diff found` | No changes between base ref and HEAD. Make sure you've made changes. |
+| State file corrupted | Delete `.claude/local/build-state-<branch>.json` and restart. |
+
+---
+
+## Architecture
+
+```
+┌──────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Claude Code │────▶│ review.sh   │────▶│ Codex CLI   │
+│  (/build)    │     │             │     │ (gpt-5.4)   │
+│              │     │  parallel   │     └─────────────┘
+│  State:      │     │  execution  │     ┌─────────────┐
+│  .claude/    │     │  + verdict  │────▶│ Gemini CLI  │
+│  local/      │     │  parsing    │     │ (3-flash)   │
+└──────────────┘     └─────────────┘     └─────────────┘
+       │                    │
+       ▼                    ▼
+  plans in             reviews in
+  docs/superpowers/    reviews/<branch>/
+  plans/
+```
+
+---
+
+## What's in the repo
+
+| File | Description |
+|------|-------------|
+| `scripts/review.sh` | Reviewer abstraction — providers, parallel exec, verdict parsing |
+| `.claude/commands/build.md` | `/build` command — state machine orchestrator |
+| `.claude/rules/dev-reference.md` | Rules — mode routing, Gemini opt-in policy |
+| `docs/2026-03-26-codex-integration-research.md` | Research: Codex integration approaches |
+| `docs/2026-03-26-agentic-coding-landscape.md` | Research: March 2026 agentic coding landscape |
+| `docs/superpowers/plans/2026-03-26-cross-model-review-workflow.md` | Full plan with state machine, loop limits, decision log |
+| `docs/superpowers/plans/2026-03-26-parallel-reviewers.md` | Plan for parallel multi-reviewer execution |
+| `docs/superpowers/plans/2026-03-26-gemini-reviewer-integration.md` | Plan for Gemini integration |
