@@ -823,9 +823,10 @@ Required sections in this order:
 6. **Subagents** — table of every agent generated (use `browser-tester` not `playwright-tester`)
 7. **Slash Commands** — table of all 5 commands
 8. **Verification Gate** — copy the section below exactly
-9. **Tool Priority (Token Efficiency)** — copy the section below exactly
-10. **Development Workflow** — numbered steps customized for their project
-11. **Cross-Model Review** *(only if HAS_CROSS_MODEL_REVIEW)* — copy the section below
+9. **Recency Check** — copy the section below exactly
+10. **Tool Priority (Token Efficiency)** — copy the section below exactly
+11. **Development Workflow** — numbered steps customized for their project
+12. **Cross-Model Review** *(only if HAS_CROSS_MODEL_REVIEW)* — copy the section below
 
 Superpowers Workflow section (copy verbatim):
 
@@ -875,6 +876,24 @@ Before claiming any task is done, fixed, or passing:
 | Deployment live | Git hash + CI status confirmed |
 
 Banned phrases without fresh evidence: "should work", "try it now", "looks correct", "should be fixed".
+```
+
+Recency Check section (copy verbatim):
+
+```
+## Recency Check
+
+When recommending anything that moves fast — AI models, SDK versions, CLI tools, library versions, cloud service features — **do not trust training data**. Spin up an Explore agent or use WebSearch to verify you are recommending the current latest version before writing it into code or docs.
+
+Fast-moving areas that always need a live check:
+- AI model IDs (Claude, GPT, Gemini, etc.)
+- npm/pip package versions
+- Framework major versions (Next.js, React, etc.)
+- CLI tool install commands
+- API endpoints and authentication methods
+- Pricing and rate limits
+
+If you cannot verify, say so — "this was current as of my last update, verify before using" — rather than stating a stale version as fact.
 ```
 
 Tool Priority section (copy verbatim):
